@@ -1,0 +1,91 @@
+# --- Secret for MySQL credentials ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dvwa-mysql-secret
+  namespace: dvwa
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: rootpassword
+  MYSQL_PASSWORD: dvwapassword
+---
+# --- PVC for MySQL data persistence ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dvwa-mysql-pvc
+  namespace: dvwa
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# --- MySQL Deployment ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dvwa-mysql
+  namespace: dvwa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dvwa-mysql
+  template:
+    metadata:
+      labels:
+        app: dvwa-mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dvwa-mysql-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_DATABASE
+          value: dvwa
+        - name: MYSQL_USER
+          value: dvwa
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dvwa-mysql-secret
+              key: MYSQL_PASSWORD
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        readinessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$(MYSQL_ROOT_PASSWORD)"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$(MYSQL_ROOT_PASSWORD)"]
+          initialDelaySeconds: 30
+          periodSeconds: 20
+      volumes:
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: dvwa-mysql-pvc
+---
+# --- MySQL Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dvwa-mysql
+  namespace: dvwa
+spec:
+  selector:
+    app: dvwa-mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+  type: ClusterIP

@@ -1,0 +1,11 @@
+output "management_public_ip"  { value = aws_eip.mgmt.public_ip }
+output "management_private_ip" { value = aws_instance.bigip.private_ip }
+output "external_public_ip"    { value = aws_eip.external.public_ip }
+output "external_private_ip"   { value = aws_network_interface.external.private_ip }
+output "internal_private_ip"   { value = aws_network_interface.internal.private_ip }
+output "instance_id"           { value = aws_instance.bigip.id }
+output "ami_id"                { value = data.aws_ami.f5.id }
+output "ami_name"              { value = data.aws_ami.f5.name }
+output "mgmt_security_group_id"     { value = aws_security_group.mgmt.id }
+output "external_security_group_id" { value = aws_security_group.external.id }
+output "internal_security_group_id" { value = aws_security_group.internal.id }

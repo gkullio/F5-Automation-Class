@@ -1,0 +1,341 @@
+#!/bin/bash
+echo "root:${bigip_password}" | chpasswd
+echo "admin:${bigip_password}" | chpasswd
+
+mkdir -p  /var/log/cloud /config/cloud /var/config/rest/downloads
+LOG_FILE=/var/log/cloud/startup-script.log
+[[ ! -f $LOG_FILE ]] && touch $LOG_FILE || { echo "Run Only Once. Exiting"; exit; }
+npipe=/tmp/$$.tmp
+trap "rm -f $npipe" EXIT
+mknod $npipe p
+tee <$npipe -a $LOG_FILE /dev/ttyS0 &
+exec 1>&-
+exec 1>$npipe
+exec 2>&1
+
+# Run Immediately Before MCPD starts
+/usr/bin/setdb provision.extramb 1000 || true
+/usr/bin/setdb provision.restjavad.extramb 1384 || /usr/bin/setdb restjavad.useextramb true || true
+/usr/bin/setdb iapplxrpm.timeout 300 || true
+/usr/bin/setdb icrd.timeout 180 || true
+/usr/bin/setdb restjavad.timeout 180 || true
+/usr/bin/setdb restnoded.timeout 180 || true
+
+### write_files:
+# Download or Render BIG-IP Runtime Init Config
+
+cat << 'EOF' > /config/cloud/runtime-init-conf.yaml
+---
+controls:
+  logLevel: silly
+  logFilename: /var/log/cloud/bigIpRuntimeInit.log
+  extensionInstallDelayInMs: 60000
+pre_onboard_enabled: []
+runtime_parameters:
+  - name: USER_NAME
+    type: static
+    value: ${bigip_username}
+  - name: USER_NAME_2
+    type: static
+    value: ${bigip_username_2}
+  - name: SSH_KEYS
+    type: static
+    value: ${ssh_keypair}
+  - name: ADMIN_PASS
+    type: static
+    value: ${bigip_password}
+  - name: DNS_SERVER
+    type: static
+    value: ${dns_server}
+  - name: DNS_SUFFIX
+    type: static
+    value: ${dns_suffix}
+  - name: NTP_SERVER
+    type: static
+    value: ${ntp_server}
+  - name: TIMEZONE
+    type: static
+    value: ${timezone}
+  - name: HOST_NAME
+    type: static
+    value: ${bigip_hostname}
+  - name: REGION
+    type: static
+    value: ${aws_region}
+  - name: EXTERNAL_SELF_IP
+    type: static
+    value: ${external_self_ip}
+  - name: INTERNAL_SELF_IP
+    type: static
+    value: ${internal_self_ip}
+  - name: EXTERNAL_GW
+    type: static
+    value: ${external_gw}
+bigip_ready_enabled: []
+extension_packages:
+  install_operations:
+    - extensionType: do
+      extensionVersion: ${DO_VER}
+      extensionUrl: file:///var/config/rest/downloads/${do_rpm_key}
+    - extensionType: as3
+      extensionVersion: ${AS3_VER}
+      extensionUrl: file:///var/config/rest/downloads/${as3_rpm_key}
+extension_services:
+  service_operations:
+    - extensionType: do
+      type: inline
+      value:
+        schemaVersion: 1.0.0
+        class: Device
+        async: true
+        label: Onboard BIG-IP
+        Common:
+          class: Tenant
+          dbVars:
+            class: DbVariables
+            provision.extramb: 1024
+            config.allow.rfc3927: enable
+            ui.advisory.enabled: true
+            ui.advisory.color: green
+            ui.advisory.text: 'This Banner can be Customized to your liking'
+          myLicense:
+            class: License
+            licenseType: regKey
+            regKey: '${license}'
+          mySystem:
+            autoPhonehome: true
+            class: System
+            hostname: '{{{ HOST_NAME }}}.${dns_suffix}'
+          '{{{ USER_NAME }}}':
+            class: User
+            partitionAccess:
+              all-partitions:
+                role: admin
+            password: '{{{ ADMIN_PASS }}}'
+            shell: bash
+            userType: regular
+            keys:
+              - '{{{ SSH_KEYS }}}'
+            forceInitialPasswordChange: false
+          '{{{ USER_NAME_2 }}}':
+            class: User
+            partitionAccess:
+              all-partitions:
+                role: admin
+            password: '{{{ ADMIN_PASS }}}'
+            shell: bash
+            userType: regular
+            keys:
+              - '{{{ SSH_KEYS }}}'
+            forceInitialPasswordChange: false
+          httpd:
+            class: HTTPD
+            maxClients: 10
+            authPamIdleTimeout: 900
+            sslCiphersuite:
+            - ECDHE-ECDSA-AES256-GCM-SHA384
+            - ECDHE-ECDSA-AES256-SHA384
+            - ECDHE-ECDSA-AES256-SHA
+            - ECDH-ECDSA-AES256-GCM-SHA384
+            - ECDH-ECDSA-AES256-SHA384
+            - ECDH-ECDSA-AES256-SHA
+            - AES256-GCM-SHA384
+            - AES256-SHA256
+            - AES256-SHA
+            - CAMELLIA256-SHA
+            - ECDHE-RSA-AES128-GCM-SHA256
+            - ECDHE-ECDSA-AES128-GCM-SHA256
+            - ECDHE-ECDSA-AES128-SHA256
+            - ECDHE-RSA-AES128-SHA
+            - ECDHE-ECDSA-AES128-SHA
+            - ECDH-ECDSA-AES128-GCM-SHA256
+            - ECDH-ECDSA-AES128-SHA256
+            - ECDH-ECDSA-AES128-SHA
+            - AES128-GCM-SHA256
+            - AES128-SHA256
+            - AES128-SHA
+            - SEED-SHA
+            - CAMELLIA128-SHA
+            sslProtocol: all -SSLv2 -SSLv3 -TLSv1
+          myDns:
+            class: DNS
+            nameServers:
+              - '{{{ DNS_SERVER }}}'
+              - 2001:4860:4860::8844
+            search:
+              - f5.com
+          myNtp:
+            class: NTP
+            servers:
+              - '{{{ NTP_SERVER }}}'
+              - 1.pool.ntp.org
+              - 2.pool.ntp.org
+            timezone: '{{{ TIMEZONE }}}'
+          myProvisioning:
+            class: Provision
+            ltm: nominal
+            asm: nominal
+            avr: nominal
+            apm: nominal
+            gtm: nominal
+          external_vlan:
+            class: VLAN
+            tag: 4094
+            mtu: 1500
+            interfaces:
+              - name: '1.1'
+                tagged: false
+          internal_vlan:
+            class: VLAN
+            tag: 4093
+            mtu: 1500
+            interfaces:
+              - name: '1.2'
+                tagged: false
+          external_self:
+            class: SelfIp
+            address: '{{{ EXTERNAL_SELF_IP }}}/24'
+            vlan: external_vlan
+            allowService: default
+            trafficGroup: traffic-group-local-only
+          internal_self:
+            class: SelfIp
+            address: '{{{ INTERNAL_SELF_IP }}}/24'
+            vlan: internal_vlan
+            allowService: default
+            trafficGroup: traffic-group-local-only
+          default_route:
+            class: Route
+            gw: '{{{ EXTERNAL_GW }}}'
+            network: default
+            mtu: 1500
+post_onboard_enabled:
+  - name: misc
+    type: inline
+    commands:
+    - tmsh create sys log-config filter Blackhole_Check_Date level warn message-id 0118000a
+    - tmsh save sys config
+EOF
+
+# ---------------------------------------------------------------------------
+# Download DO and AS3 RPMs from S3
+#
+# BIG-IP VE has python3 but not awscli or boto3. This inline script uses
+# only stdlib to get IMDSv2 credentials and make SigV4-signed S3 GETs.
+# ---------------------------------------------------------------------------
+
+cat << 'PYEOF' > /config/cloud/s3_download.py
+import sys, os, json, hashlib, hmac, datetime
+from urllib.request import Request, urlopen
+
+def get_imdsv2_token():
+    req = Request("http://169.254.169.254/latest/api/token", method="PUT")
+    req.add_header("X-aws-ec2-metadata-token-ttl-seconds", "300")
+    with urlopen(req, timeout=5) as resp:
+        return resp.read().decode()
+
+def get_iam_credentials(token):
+    hdr = {"X-aws-ec2-metadata-token": token}
+    base = "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+    with urlopen(Request(base, headers=hdr), timeout=5) as resp:
+        role = resp.read().decode().strip()
+    with urlopen(Request(base + role, headers=hdr), timeout=5) as resp:
+        return json.loads(resp.read().decode())
+
+def _sign(key, msg):
+    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
+
+def _signing_key(secret, date_stamp, region, service):
+    k = _sign(("AWS4" + secret).encode("utf-8"), date_stamp)
+    k = _sign(k, region)
+    k = _sign(k, service)
+    return _sign(k, "aws4_request")
+
+def download(bucket, key, region, output_path):
+    token = get_imdsv2_token()
+    creds = get_iam_credentials(token)
+    access_key    = creds["AccessKeyId"]
+    secret_key    = creds["SecretAccessKey"]
+    session_token = creds["Token"]
+
+    host = "{}.s3.{}.amazonaws.com".format(bucket, region)
+    uri  = "/{}".format(key)
+    now  = datetime.datetime.utcnow()
+    amz_date   = now.strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = now.strftime("%Y%m%d")
+    payload_hash = hashlib.sha256(b"").hexdigest()
+
+    canonical_headers = (
+        "host:{}\n"
+        "x-amz-content-sha256:{}\n"
+        "x-amz-date:{}\n"
+        "x-amz-security-token:{}\n"
+    ).format(host, payload_hash, amz_date, session_token)
+    signed_headers = "host;x-amz-content-sha256;x-amz-date;x-amz-security-token"
+
+    canonical_request = "\n".join([
+        "GET", uri, "",
+        canonical_headers,
+        signed_headers,
+        payload_hash,
+    ])
+
+    credential_scope = "/".join([date_stamp, region, "s3", "aws4_request"])
+    string_to_sign = "\n".join([
+        "AWS4-HMAC-SHA256",
+        amz_date,
+        credential_scope,
+        hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+    ])
+
+    sig_key   = _signing_key(secret_key, date_stamp, region, "s3")
+    signature = hmac.new(sig_key, string_to_sign.encode("utf-8"),
+                         hashlib.sha256).hexdigest()
+
+    authorization = (
+        "AWS4-HMAC-SHA256 Credential={}/{}, "
+        "SignedHeaders={}, Signature={}"
+    ).format(access_key, credential_scope, signed_headers, signature)
+
+    url = "https://{}{}".format(host, uri)
+    req = Request(url)
+    req.add_header("Authorization", authorization)
+    req.add_header("x-amz-date", amz_date)
+    req.add_header("x-amz-content-sha256", payload_hash)
+    req.add_header("x-amz-security-token", session_token)
+    req.add_header("Host", host)
+
+    with urlopen(req, timeout=120) as resp, open(output_path, "wb") as f:
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    size = os.path.getsize(output_path)
+    print("OK  s3://{}/{} -> {} ({} bytes)".format(bucket, key, output_path, size))
+
+if __name__ == "__main__":
+    download(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+PYEOF
+
+# Download Declarative Onboarding RPM from S3
+for i in {1..30}; do
+    python3 /config/cloud/s3_download.py "${rpm_bucket}" "${do_rpm_key}" "${aws_region}" "/var/config/rest/downloads/${do_rpm_key}" && break || sleep 10
+done
+
+# Download AS3 RPM from S3
+for i in {1..30}; do
+    python3 /config/cloud/s3_download.py "${rpm_bucket}" "${as3_rpm_key}" "${aws_region}" "/var/config/rest/downloads/${as3_rpm_key}" && break || sleep 10
+done
+
+# Download BIG-IP Runtime Init
+for i in {1..30}; do
+    curl -fv --retry 1 --connect-timeout 5 -L ${INIT_URL} -o "/var/config/rest/downloads/f5-bigip-runtime.gz.run" && break || sleep 10
+done
+
+# Install BIG-IP Runtime Init
+bash /var/config/rest/downloads/f5-bigip-runtime.gz.run -- '--cloud aws'
+
+# Run BIG-IP Runtime Init and Process YAML
+f5-bigip-runtime-init --config-file /config/cloud/runtime-init-conf.yaml

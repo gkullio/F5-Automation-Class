@@ -1,0 +1,35 @@
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dvwa
+  template:
+    metadata:
+      labels:
+        app: dvwa
+    spec:
+      containers:
+      - name: dvwa
+        image: vulnerables/web-dvwa:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: MYSQL_HOST
+          value: dvwa-mysql
+        - name: MYSQL_DATABASE
+          value: dvwa
+        - name: MYSQL_USER
+          value: dvwa
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dvwa-mysql-secret
+              key: MYSQL_PASSWORD
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"

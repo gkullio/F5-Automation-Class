@@ -1,0 +1,72 @@
+# Azure Credentials
+# For the providers.tf in the root
+# Azure Service Principal Information
+# --Retreive from Azure Portal or CLI--
+# --Recommend using a custom role with Contributor + role assignment permissions--
+# Azure CLI Example: az ad sp create-for-rbac --name <name> --role <your custom role name> --scopes /subscriptions/<your Azure subscription ID>
+client_id       = ""
+client_secret   = ""
+tenant_id       = ""
+subscription_id = ""
+
+# Global Variables
+rg_name                     = ""
+resourceOwner               = ""
+ownerEmail                  = ""
+location                    = "westus2"
+instance_size               = "Standard_D8s_v5"
+
+####### Module app-service #######
+
+app_name                    = "demo-app-container"
+create_service_plan         = true
+service_plan_name           = ""
+sku_name                    = "B1"
+docker_image                = "stockdemo/demoapp:latest"
+docker_registry_url         = "https://index.docker.io"
+app_port                    = 8080
+always_on                   = true
+https_only                  = false
+existing_service_plan_id    = null
+extra_app_settings          = null
+
+
+####### Module azure-vnet #######
+
+vnet_name                   = ""
+vnet_address_space          = "10.245.0.0/16"
+mgmt_subnet_name            = "mgmt"
+mgmt_address_space          = "10.245.1.0/24"
+ext_subnet_name             = "ext"
+ext_address_space           = "10.245.2.0/24"
+int_subnet_name             = "int"
+int_address_space           = "10.245.3.0/24"
+
+####### Module BIG-IP / bigip.tf  #######
+
+vm_name                     = "bigip-3nic"
+instance_prefix             = ""
+bigip-username              = "testuser"
+bigip-password              = "T3stP@ssw0rd"
+
+####### Networking source address lists  #######
+
+vpnMgmtSrcAddr              = [""]
+REtrafficSrcAddr            = [""]
+
+# BIG-IP VE specific variables for onboarding script
+bigip-hostname              = "bigip-poc"
+ssh_publickey               = "~/.ssh/id_rsa.pub"
+f5_product_name             = "f5-big-ip-good"
+f5_image_name               = "f5-bigip-virtual-edition-25m-good-hourly"
+f5_version                  = "17.5.109174"
+f5_username                 = "user1"
+f5_username_2               = "user2"
+f5_password                 = "T3stP@ssw0rd"
+dns_suffix                  = "pov.payg"
+dns_server                  = "8.8.8.8"
+availability_zone           = 1
+ntp_server                  = "0.us.pool.ntp.org"
+timezone                    = "US/Pacific"
+script_name                 = "f5_onboard"
+disable_ssh_key             = true

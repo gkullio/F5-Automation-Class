@@ -1,0 +1,420 @@
+#!/bin/bash
+echo "root:${bigip_password}" | chpasswd
+echo "admin:${bigip_password}" | chpasswd
+
+mkdir -p  /var/log/cloud /config/cloud /var/config/rest/downloads
+LOG_FILE=/var/log/cloud/startup-script.log
+[[ ! -f $LOG_FILE ]] && touch $LOG_FILE || { echo "Run Only Once. Exiting"; exit; }
+npipe=/tmp/$$.tmp
+trap "rm -f $npipe" EXIT
+mknod $npipe p
+tee <$npipe -a $LOG_FILE /dev/ttyS0 &
+exec 1>&-
+exec 1>$npipe
+exec 2>&1
+
+# Run Immediately Before MCPD starts
+/usr/bin/setdb provision.extramb 1000 || true
+/usr/bin/setdb provision.restjavad.extramb 1384 || /usr/bin/setdb restjavad.useextramb true || true
+/usr/bin/setdb iapplxrpm.timeout 300 || true
+/usr/bin/setdb icrd.timeout 180 || true
+/usr/bin/setdb restjavad.timeout 180 || true
+/usr/bin/setdb restnoded.timeout 180 || true
+
+### write_files:
+# Download or Render BIG-IP Runtime Init Config
+
+cat << 'EOF' > /config/cloud/runtime-init-conf.yaml
+---
+controls:
+  logLevel: silly
+  logFilename: /var/log/cloud/bigIpRuntimeInit.log
+  extensionInstallDelayInMs: 60000
+pre_onboard_enabled: []
+runtime_parameters:
+  - name: USER_NAME
+    type: static
+    value: ${bigip_username}
+  - name: USER_NAME_2
+    type: static
+    value: ${bigip_username_2}
+  - name: SSH_KEYS
+    type: static
+    value: ${ssh_keypair}
+  - name: ADMIN_PASS
+    type: static
+    value: ${bigip_password}
+  - name: DNS_SERVER
+    type: static
+    value: ${dns_server}
+  - name: DNS_SUFFIX
+    type: static
+    value: ${dns_suffix}
+  - name: NTP_SERVER
+    type: static
+    value: ${ntp_server}
+  - name: TIMEZONE
+    type: static
+    value: ${timezone}
+  - name: HOST_NAME
+    type: static
+    value: ${bigip_hostname}
+  - name: REGION
+    type: static
+    value: ${gcp_region}
+  - name: EXTERNAL_SELF_IP
+    type: static
+    value: ${external_self_ip}
+  - name: INTERNAL_SELF_IP
+    type: static
+    value: ${internal_self_ip}
+  - name: EXTERNAL_GW
+    type: static
+    value: ${external_gw}
+bigip_ready_enabled: []
+extension_packages:
+  install_operations:
+    - extensionType: do
+      extensionVersion: ${DO_VER}
+      extensionUrl: file:///var/config/rest/downloads/${do_rpm_key}
+    - extensionType: as3
+      extensionVersion: ${AS3_VER}
+      extensionUrl: file:///var/config/rest/downloads/${as3_rpm_key}
+extension_services:
+  service_operations:
+    - extensionType: do
+      type: inline
+      value:
+        schemaVersion: 1.0.0
+        class: Device
+        async: true
+        label: Onboard BIG-IP
+        Common:
+          class: Tenant
+          dbVars:
+            class: DbVariables
+            provision.extramb: 1024
+            config.allow.rfc3927: enable
+            ui.advisory.enabled: true
+            ui.advisory.color: green
+            ui.advisory.text: 'This Banner can be Customized to your liking'
+          myLicense:
+            class: License
+            licenseType: regKey
+            regKey: '${license}'
+          mySystem:
+            autoPhonehome: true
+            class: System
+            hostname: '{{{ HOST_NAME }}}.${dns_suffix}'
+          '{{{ USER_NAME }}}':
+            class: User
+            partitionAccess:
+              all-partitions:
+                role: admin
+            password: '{{{ ADMIN_PASS }}}'
+            shell: bash
+            userType: regular
+            keys:
+              - '{{{ SSH_KEYS }}}'
+            forceInitialPasswordChange: false
+          '{{{ USER_NAME_2 }}}':
+            class: User
+            partitionAccess:
+              all-partitions:
+                role: admin
+            password: '{{{ ADMIN_PASS }}}'
+            shell: bash
+            userType: regular
+            keys:
+              - '{{{ SSH_KEYS }}}'
+            forceInitialPasswordChange: false
+          httpd:
+            class: HTTPD
+            maxClients: 10
+            authPamIdleTimeout: 900
+            sslCiphersuite:
+            - ECDHE-ECDSA-AES256-GCM-SHA384
+            - ECDHE-ECDSA-AES256-SHA384
+            - ECDHE-ECDSA-AES256-SHA
+            - ECDH-ECDSA-AES256-GCM-SHA384
+            - ECDH-ECDSA-AES256-SHA384
+            - ECDH-ECDSA-AES256-SHA
+            - AES256-GCM-SHA384
+            - AES256-SHA256
+            - AES256-SHA
+            - CAMELLIA256-SHA
+            - ECDHE-RSA-AES128-GCM-SHA256
+            - ECDHE-ECDSA-AES128-GCM-SHA256
+            - ECDHE-ECDSA-AES128-SHA256
+            - ECDHE-RSA-AES128-SHA
+            - ECDHE-ECDSA-AES128-SHA
+            - ECDH-ECDSA-AES128-GCM-SHA256
+            - ECDH-ECDSA-AES128-SHA256
+            - ECDH-ECDSA-AES128-SHA
+            - AES128-GCM-SHA256
+            - AES128-SHA256
+            - AES128-SHA
+            - SEED-SHA
+            - CAMELLIA128-SHA
+            sslProtocol: all -SSLv2 -SSLv3 -TLSv1
+          myDns:
+            class: DNS
+            nameServers:
+              - '{{{ DNS_SERVER }}}'
+              - 2001:4860:4860::8844
+            search:
+              - f5.com
+          myNtp:
+            class: NTP
+            servers:
+              - '{{{ NTP_SERVER }}}'
+              - 1.pool.ntp.org
+              - 2.pool.ntp.org
+            timezone: '{{{ TIMEZONE }}}'
+          myProvisioning:
+            class: Provision
+            ltm: nominal
+            asm: nominal
+            avr: nominal
+            apm: nominal
+            gtm: nominal
+          external_vlan:
+            class: VLAN
+            tag: 4094
+            mtu: 1500
+            interfaces:
+              - name: '1.1'
+                tagged: false
+          internal_vlan:
+            class: VLAN
+            tag: 4093
+            mtu: 1500
+            interfaces:
+              - name: '1.2'
+                tagged: false
+          external_self:
+            class: SelfIp
+            address: '{{{ EXTERNAL_SELF_IP }}}/24'
+            vlan: external_vlan
+            allowService: default
+            trafficGroup: traffic-group-local-only
+          internal_self:
+            class: SelfIp
+            address: '{{{ INTERNAL_SELF_IP }}}/24'
+            vlan: internal_vlan
+            allowService: default
+            trafficGroup: traffic-group-local-only
+          default_route:
+            class: Route
+            gw: '{{{ EXTERNAL_GW }}}'
+            network: default
+            mtu: 1500
+    - extensionType: as3
+      type: inline
+      value:
+        class: AS3
+        action: deploy
+        persist: true
+        declaration:
+          class: ADC
+          schemaVersion: 3.0.0
+          label: Sample 1
+          remark: A HTTP sample application
+          Common:
+            class: Tenant
+            Shared:
+              class: Application
+              template: shared
+              letsencrypt_cert:
+                class: Certificate
+                certificate: "${replace(trimspace(tls_cert_pem), "\n", "\\n")}"
+                privateKey: "${replace(trimspace(tls_key_pem), "\n", "\\n")}"
+                chainCA: "${replace(trimspace(tls_chain_pem), "\n", "\\n")}"
+              letsencrypt_tls:
+                class: TLS_Server
+                certificates:
+                  - certificate: /Common/Shared/letsencrypt_cert
+                cipherGroup:
+                 bigip: /Common/f5-default
+post_onboard_enabled:
+  - name: misc
+    type: inline
+    commands:
+    - tmsh create sys log-config filter Blackhole_Check_Date level warn message-id 0118000a
+    - tmsh save sys config
+EOF
+
+# ---------------------------------------------------------------------------
+# Download DO and AS3 RPMs from GCS
+#
+# BIG-IP VE has python3 but not gcloud CLI or google-cloud-storage. This
+# inline script uses only stdlib to get an OAuth2 access token from the
+# GCP metadata server and make authenticated GCS JSON API requests.
+# ---------------------------------------------------------------------------
+
+cat << 'PYEOF' > /config/cloud/gcs_download.py
+import sys, os, json
+from urllib.request import Request, urlopen
+from urllib.parse import quote
+
+def get_access_token():
+    url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+    req = Request(url)
+    req.add_header("Metadata-Flavor", "Google")
+    with urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())["access_token"]
+
+def download(bucket, key, output_path):
+    token = get_access_token()
+    encoded_key = quote(key, safe="")
+    url = "https://storage.googleapis.com/storage/v1/b/{}/o/{}?alt=media".format(bucket, encoded_key)
+    req = Request(url)
+    req.add_header("Authorization", "Bearer {}".format(token))
+
+    with urlopen(req, timeout=120) as resp, open(output_path, "wb") as f:
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    size = os.path.getsize(output_path)
+    print("OK  gs://{}/{} -> {} ({} bytes)".format(bucket, key, output_path, size))
+
+if __name__ == "__main__":
+    download(sys.argv[1], sys.argv[2], sys.argv[3])
+PYEOF
+
+# Download Declarative Onboarding RPM from GCS
+for i in {1..30}; do
+    python3 /config/cloud/gcs_download.py "${rpm_bucket}" "${do_rpm_key}" "/var/config/rest/downloads/${do_rpm_key}" && break || sleep 10
+done
+
+# Download AS3 RPM from GCS
+for i in {1..30}; do
+    python3 /config/cloud/gcs_download.py "${rpm_bucket}" "${as3_rpm_key}" "/var/config/rest/downloads/${as3_rpm_key}" && break || sleep 10
+done
+
+# Download BIG-IP Runtime Init
+for i in {1..30}; do
+    curl -fv --retry 1 --connect-timeout 5 -L ${INIT_URL} -o "/var/config/rest/downloads/f5-bigip-runtime.gz.run" && break || sleep 10
+done
+
+# Install BIG-IP Runtime Init
+bash /var/config/rest/downloads/f5-bigip-runtime.gz.run -- '--cloud gcp'
+
+# Run BIG-IP Runtime Init and Process YAML
+f5-bigip-runtime-init --config-file /config/cloud/runtime-init-conf.yaml
+
+
+### CrowdStrike Falcon sensor
+
+%{ if CS_ENABLED ~}
+CS_TAG="[crowdstrike]"
+
+cs_log() {
+    echo "$CS_TAG $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"
+}
+
+cs_log_stream() {
+    while IFS= read -r cs_line; do
+        cs_log "  $1| $cs_line"
+    done
+}
+
+CS_RPM_URL_SAFE=$(echo '${CS_RPM_URL}' | cut -d'?' -f1)
+CS_SCRIPT_URL_SAFE=$(echo '${CS_SCRIPT_URL}' | cut -d'?' -f1)
+CS_CID_SAFE=$(echo '${CS_CID}' | cut -c1-8)
+
+install_crowdstrike() {
+    local rc
+
+    cs_log "Step 1/5: creating staging directories."
+    mkdir -p "$(dirname '${CS_SENSOR_PATH}')" /var/tmp/crowdstrike
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        cs_log "mkdir failed (rc=$rc)."
+        return 11
+    fi
+    cs_log "Staging directories ready: $(dirname '${CS_SENSOR_PATH}'), /var/tmp/crowdstrike"
+
+    cs_log "Step 2/5: downloading sensor RPM from $CS_RPM_URL_SAFE"
+    curl -fsSL --retry 5 --retry-delay 10 --connect-timeout 10 \
+        "${CS_RPM_URL}" -o '${CS_SENSOR_PATH}' 2>/var/tmp/crowdstrike/rpm-curl.err
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        cs_log "Sensor RPM download failed (curl rc=$rc)."
+        cs_log_stream "curl" < /var/tmp/crowdstrike/rpm-curl.err
+        return 12
+    fi
+    cs_log "Sensor RPM saved to ${CS_SENSOR_PATH} ($(stat -c %s '${CS_SENSOR_PATH}' 2>/dev/null) bytes)."
+
+    cs_log "Step 3/5: downloading install script from $CS_SCRIPT_URL_SAFE"
+    curl -fsSL --retry 5 --retry-delay 10 --connect-timeout 10 \
+        "${CS_SCRIPT_URL}" -o /var/tmp/crowdstrike/cs-install.sh 2>/var/tmp/crowdstrike/script-curl.err
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        cs_log "Install script download failed (curl rc=$rc)."
+        cs_log_stream "curl" < /var/tmp/crowdstrike/script-curl.err
+        return 13
+    fi
+    cs_log "Install script saved to /var/tmp/crowdstrike/cs-install.sh ($(stat -c %s /var/tmp/crowdstrike/cs-install.sh 2>/dev/null) bytes)."
+
+    cs_log "Step 4/5: setting install script permissions."
+    chmod 0700 /var/tmp/crowdstrike/cs-install.sh
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        cs_log "chmod on install script failed (rc=$rc)."
+        return 14
+    fi
+
+    cs_log "Step 5/5: running cs-install.sh (CID $CS_CID_SAFE..., tags '${CS_TAGS}', rpm ${CS_SENSOR_PATH})."
+    CS_CID='${CS_CID}' \
+    TAGS='${CS_TAGS}' \
+    CS_PROVISIONING_TOKEN='${CS_PROVISIONING_TOKEN}' \
+    SENSOR_RPM='${CS_SENSOR_PATH}' \
+        bash /var/tmp/crowdstrike/cs-install.sh > /var/tmp/crowdstrike/cs-install.out 2>&1
+    rc=$?
+    cs_log "cs-install.sh exited with rc=$rc; its output follows."
+    cs_log_stream "install" < /var/tmp/crowdstrike/cs-install.out
+    if [ $rc -ne 0 ]; then
+        return 15
+    fi
+
+    return 0
+}
+
+cs_log "Installing CrowdStrike Falcon sensor..."
+if install_crowdstrike; then
+    cs_log "SUCCESS: CrowdStrike Falcon sensor install completed."
+
+    cs_log "Sensor identity and version:"
+    /opt/CrowdStrike/falconctl -g --cid --tags --version 2>&1 | cs_log_stream "falconctl"
+
+    cs_log "Installed package:"
+    rpm -q falcon-sensor 2>&1 | cs_log_stream "rpm"
+
+    cs_log "Sensor service state:"
+    { systemctl is-active falcon-sensor 2>&1 || service falcon-sensor status 2>&1; } | cs_log_stream "service"
+    ps -ef | grep '[f]alcond' | cs_log_stream "ps"
+else
+    cs_rc=$?
+    case $cs_rc in
+        11) cs_step="creating staging directories" ;;
+        12) cs_step="downloading the sensor RPM from $CS_RPM_URL_SAFE" ;;
+        13) cs_step="downloading the install script from $CS_SCRIPT_URL_SAFE" ;;
+        14) cs_step="setting permissions on the install script" ;;
+        15) cs_step="running cs-install.sh" ;;
+        *)  cs_step="an unexpected step" ;;
+    esac
+    cs_log "WARNING: CrowdStrike Falcon sensor install FAILED while $cs_step (rc=$cs_rc)." >&2
+    cs_log "Post-failure state:" >&2
+    ls -l '${CS_SENSOR_PATH}' /var/tmp/crowdstrike 2>&1 | cs_log_stream "ls"
+    rpm -qa 2>/dev/null | grep -i falcon | cs_log_stream "rpm"
+    cs_log "BIG-IP onboarding is unaffected. Full transcript: $LOG_FILE." >&2
+fi
+
+rm -rf /var/tmp/crowdstrike
+%{ else ~}
+echo "[crowdstrike] $(date -u '+%Y-%m-%dT%H:%M:%SZ') Falcon sensor install skipped: crowdstrike_enabled = false."
+%{ endif ~}

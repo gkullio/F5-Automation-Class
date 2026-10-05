@@ -1,0 +1,10 @@
+*.tfvars
+*.terraform
+*.terraform.lock.hcl
+*.terraform.tfstate.lock.info
+
+**/.terraform/
+
+# Terraform state (contains sensitive infrastructure data and secrets)
+*.tfstate
+*.tfstate.backup
