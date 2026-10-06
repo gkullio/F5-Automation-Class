@@ -1,232 +1,369 @@
-# AWS Single-NIC BIG-IP
+# F5 BIG-IP Single-NIC (BYOL) - AWS
 
-Single-NIC BIG-IP VE in AWS. 
+This Terraform project deploys a standalone F5 BIG-IP Virtual Edition (VE) in a **single-NIC topology** on Amazon Web Services using **Bring-Your-Own-License (BYOL)** licensing. A valid F5 registration key is applied at boot time via the Declarative Onboarding (DO) `myLicense` class. The BIG-IP is fully onboarded at boot time via F5 BIG-IP Runtime Init, DO, and Application Services 3 (AS3) -- no manual configuration required. The single interface carries both management and data-plane traffic, with the GUI accessible on **port 8443** so that port 443 remains available for virtual servers. RPM extensions are delivered via a private **S3 bucket** using the instance's **IAM role** credentials.
+
+## Architecture
 
 ```
-providers.tf   aws + azurerm, http, time
-main.tf        module wiring, my_ip
-variables.tf
-outputs.tf
-terraform.tfvars.boilerplate
-modules/
-  aws-vpc/     vpc, subnet, igw, route table, association
-  bigip/       ami lookup, sg, key pair, eip, instance, f5_onboard.tmpl
+                      Internet
+                         |
+                         v
+                 [ Elastic IP ]
+              (Static, VPC-scoped)
+                         |
+                         v
+              [ Security Group ]
+              Admin:  22, 8443
+              App:    80, 443, 8080, 8081
+              Source: allowlisted IPs only
+              Egress: all outbound (required)
+                         |
+                         v
+    +------------------------------------+
+    |        BIG-IP VE (Single NIC)      |
+    |   Management Subnet (AZ-pinned)    |
+    |   source_dest_check = false        |
+    |                                    |
+    |   BYOL License (regKey via DO)     |
+    |                                    |
+    |   Modules: LTM, ASM, AVR, APM,    |
+    |            GTM (Best tier)         |
+    |                                    |
+    |   Management GUI on port 8443      |
+    |   Virtual servers on port 443      |
+    +------------------------------------+
+              |
+              v
+    [ IAM Instance Profile ]
+    (S3 GetObject for RPM bucket)
+
+    AWS VPC
+    +-- Subnet (mgmt, single AZ)
+    +-- Internet Gateway
+    +-- Route Table (0.0.0.0/0 -> IGW)
+    +-- Route Table Association
 ```
 
----
+### Traffic Flow
 
-## Before your first apply
+1. External clients connect to the BIG-IP's Elastic IP on the desired port (e.g., **443** for HTTPS)
+2. The security group allows inbound traffic from allowlisted source CIDRs
+3. BIG-IP processes traffic through virtual servers configured via AS3
+4. Management access (SSH, WebUI) is on ports **22** and **8443**, restricted to admin source addresses
+5. RPM extensions (DO, AS3) are downloaded from a private **S3 bucket** using the instance's **IAM role** credentials via SigV4-signed requests
+6. The BYOL registration key is applied during DO onboarding via the `myLicense` class
 
-### 1. Accept the AWS Marketplace offer
+## Prerequisites
 
-**This is not a Terraform step and it is not optional.** Someone with
-marketplace rights has to accept the offer for the BIG-IP AMI in the AWS
-Marketplace console, once per account. It is the analog of
-`az vm image terms accept` / the Azure `plan` block.
+- [Terraform](https://www.terraform.io/downloads) >= 1.0
+- AWS CLI configured with SSO or environment credentials (`aws sso login --profile <name>`)
+- Azure CLI / Service Principal (for cross-cloud DNS, Key Vault, and artifact-store dependencies)
+- An SSH key pair
+- A valid **F5 BIG-IP BYOL registration key**
+- F5 BIG-IP AWS Marketplace offer accepted for the BYOL AMI
 
-Skip it and the apply fails with `OptInRequired` at instance creation — after
-the VPC, subnet, gateway, security group and EIP have all been built.
+### AWS Authentication
 
-### 2. Confirm the AMI name in your region
+This project does **not** use `access_key` / `secret_key` variables. The AWS provider resolves credentials in this order:
 
-`f5_ami_search_name` defaults to `*BIGIP-17*PAYG-Best Plus 25Mbps*`, matching
-the Azure labs' `f5-big-best-plus-hourly-25mbps`. Verify it resolves:
+1. **`aws_profile`** -- named profile from `~/.aws/config` (local SSO runs)
+2. **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`** -- environment variables (GitHub Actions OIDC)
+3. **EC2 instance role** -- when running from an EC2 instance
+
+Leave `aws_profile` empty in CI so environment credentials are used.
+
+### Accept Marketplace Terms
+
+Before deploying, accept the AWS Marketplace terms for the BIG-IP BYOL AMI. This is a one-time step per AWS account:
+
+1. Visit the [F5 BIG-IP VE - ALL (BYOL, 2 Boot Locations)](https://aws.amazon.com/marketplace) listing in the AWS Marketplace console
+2. Click **Continue to Subscribe** and accept the terms
+
+Confirm available AMIs in your region:
 
 ```bash
 aws ec2 describe-images --owners aws-marketplace \
-  --filters "Name=name,Values=*BIGIP-17*PAYG*" \
+  --filters "Name=name,Values=*BIGIP-17*BYOL*" \
   --query 'Images[].[Name,ImageId,CreationDate]' --output table
 ```
 
-In order to use the`f5_ami_search_name` for a versin 21image, use the following. `*BIGIP-21*PAYG-Best Plus 25Mbps*`. Verify it resolves:
+### Azure Cross-Cloud Dependencies
+
+Several shared resources live in Azure and are referenced by this AWS project:
+
+| Dependency | Where It Lives | Why It Stayed |
+|------------|----------------|---------------|
+| `kulland.info` DNS zone | Azure DNS | The zone already exists; an A-record pointing at an Elastic IP works from anywhere |
+| Wildcard TLS certificate | Azure Key Vault | Avoids duplicating the cert into AWS Secrets Manager |
+| CrowdStrike sensor artifacts | Azure Blob Storage | Fetched over HTTPS with a SAS token; works identically from EC2 |
+
+The Azure Service Principal credentials (`client_id`, `client_secret`, `tenant_id`, `subscription_id`) are required for these cross-cloud lookups.
+
+## Project Structure
+
+```
+Single-NIC/
++-- main.tf                         # Root module: public IP lookup, module calls
++-- variables.tf                    # All root-level input variables
++-- outputs.tf                      # SSH, WebUI, EC2 console link, AMI info
++-- providers.tf                    # Provider config (aws ~>5.0, http ~>3.0, time ~>0.9)
++-- modules/
+    +-- aws-vpc/
+    |   +-- main.tf                 # VPC, subnet, internet gateway, route table
+    |   +-- variables.tf
+    |   +-- outputs.tf
+    +-- bigip/
+        +-- bigip.tf                # EC2 instance (BIG-IP VE)
+        +-- network.tf              # AMI lookup, security group, key pair, EIP
+        +-- s3.tf                   # S3 bucket, RPM objects, IAM role + profile
+        +-- variables.tf
+        +-- bigip_outputs.tf
+        +-- f5_onboard.tmpl         # Cloud-init onboarding script template
+        +-- rpm_files/
+            +-- f5-declarative-onboarding-*.noarch.rpm
+            +-- f5-appsvcs-*.noarch.rpm
+```
+
+## Quick Start
+
+1. **Copy and configure variables**
+
+   ```bash
+   cp terraform.tfvars.boilerplate terraform.tfvars
+   ```
+
+   Edit `terraform.tfvars` and fill in all required values (see [Variables](#variables) below). The `byol_license` variable is **required** -- provide your F5 registration key.
+
+2. **Authenticate to AWS**
+
+   ```bash
+   aws sso login --profile <your-profile>
+   ```
+
+3. **Deploy with Terraform**
+
+   ```bash
+   terraform init -upgrade
+   terraform validate
+   terraform plan -out=tfplan
+   terraform apply "tfplan"
+   ```
+
+4. **Access the BIG-IP**
+
+   After deployment, Terraform outputs:
+   - **SSH**: `ssh admin@<elastic_ip>`
+   - **WebUI**: `https://<elastic_ip>:8443`
+   - **EC2 Console**: Direct link to the instance in the AWS console
+   - **AMI**: The resolved AMI name and ID
+
+5. **Troubleshoot onboarding**
+
+   If the GUI is up but no modules are provisioned, tail the startup log:
+
+   ```bash
+   ssh -t admin@<elastic_ip> 'run util bash -c "tail -f /var/log/cloud/startup-script.log"'
+   ```
+
+## Variables
+
+### AWS Credentials
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `aws_region` | AWS region to deploy into (e.g., `us-east-1`) | -- |
+| `aws_profile` | Named profile from `~/.aws/config` for local SSO runs; leave empty in CI | `""` |
+
+### Azure Cross-Cloud Credentials
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `client_id` | Azure Service Principal Application ID | Yes |
+| `client_secret` | Azure Service Principal Secret | Yes |
+| `tenant_id` | Azure AD Tenant ID | Yes |
+| `subscription_id` | Azure Subscription ID | Yes |
+
+### Global
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `project_name` | Grouping label stamped on every resource via `default_tags` | `bigip-aws-1nic` |
+| `resourceOwner` | Owner name for tagging | -- |
+| `instance_size` | EC2 instance type ([sizing guide](https://clouddocs.f5.com/cloud/public/v1/matrix.html#amazon-web-services)) | -- |
+
+### Networking
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `vpc_name` | VPC name | -- |
+| `vpc_cidr` | VPC CIDR block | -- |
+| `mgmt_subnet_name` | Management subnet name | -- |
+| `mgmt_cidr` | Management subnet CIDR | -- |
+| `availability_zone` | Full AZ name (e.g., `us-east-1a`) -- AWS subnets are AZ-scoped | -- |
+
+### Access Control
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `vpnMgmtSrcAddr` | List of IPs/CIDRs allowed management access (SSH, WebUI on 8443) | -- |
+| `REtrafficSrcAddr` | List of IPs/CIDRs for application traffic (ports 80, 443, 8080, 8081) | -- |
+
+> **Note**: The deployer's current public IP is automatically detected and added to the management allowlist.
+
+### BIG-IP VM
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `vm_name` | Instance Name tag | -- |
+| `instance_prefix` | Prefix for derived resource names (SG, EIP, key pair, S3 bucket) | -- |
+
+### BIG-IP Onboarding
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `bigip-hostname` | BIG-IP hostname | -- |
+| `ssh_publickey` | Path to SSH public key file | -- |
+| `f5_ami_search_name` | Wildcard match for the BIG-IP AMI name | `*BIGIP-17*BYOL*` |
+| `f5_ami_owner` | AMI owner filter | `aws-marketplace` |
+| `byol_license` | F5 BIG-IP BYOL registration key (sensitive, **required**) | -- |
+| `f5_username` | First BIG-IP admin user | -- |
+| `f5_username_2` | Second BIG-IP admin user | -- |
+| `f5_password` | Password for both BIG-IP users (sensitive) | -- |
+| `dns_suffix` | DNS suffix for BIG-IP hostname | -- |
+| `dns_server` | Primary DNS server | -- |
+| `dns_record_name` | A-record hostname in the DNS zone | `bigip-1nic-aws` |
+| `ntp_server` | Primary NTP server | -- |
+| `timezone` | System timezone | -- |
+| `script_name` | Onboarding template name (without `.tmpl`) | -- |
+| `INIT_URL` | F5 BIG-IP Runtime Init download URL | v2.0.3 |
+| `key_vault_name` | Azure Key Vault storing the wildcard certificate | -- |
+| `key_vault_rg` | Resource group containing the Key Vault | `kulland-house-keys` |
+
+### CrowdStrike
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `crowdstrike_enabled` | Install the CrowdStrike Falcon sensor during onboarding | `true` |
+| `cs_cid` | CrowdStrike Customer ID (32 hex + hyphen + 2-char checksum, sensitive) | `""` |
+| `cs_tags_bigip` | Falcon sensor grouping tags (comma-separated) | `""` |
+| `cs_provisioning_token` | Falcon installation token (sensitive) | `""` |
+| `cs_sas_validity_hours` | Lifetime of the read-only SAS token for sensor packages | `8760` (1 year) |
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `BIG-IP-SSH` | Ready-to-use SSH command: `ssh admin@<elastic_ip>` |
+| `BIG-IP-UI-ip` | BIG-IP management URL: `https://<elastic_ip>:8443` |
+| `ec2_console_url` | Direct link to the EC2 instance in the AWS console |
+| `bigip_ami` | Resolved AMI name and ID |
+| `onboarding_log_tail` | SSH command to tail the startup log for troubleshooting |
+| `console_output_cmd` | AWS CLI command to retrieve boot-time console output |
+
+## AWS Resources Created
+
+| Resource | Purpose |
+|----------|---------|
+| VPC | Network backbone with DNS support and DNS hostnames enabled |
+| Subnet (mgmt) | Single subnet pinned to one availability zone |
+| Internet Gateway | Provides outbound internet access (required for onboarding) |
+| Route Table | Default route (0.0.0.0/0) pointing to the internet gateway |
+| Route Table Association | Binds the mgmt subnet to the public route table |
+| Security Group | Inbound rules for ports 22, 8443 (admin) and 80, 443, 8080, 8081 (app); all egress |
+| Key Pair | SSH key pair for instance access |
+| Elastic IP | Static public IP (VPC-scoped) for management and data access |
+| EIP Association | Binds the Elastic IP to the BIG-IP instance |
+| EC2 Instance | F5 BIG-IP VE (BYOL, all modules, IMDSv2 required) |
+| S3 Bucket | Hosts DO and AS3 extension RPMs (private, SSE-AES256) |
+| S3 Public Access Block | Blocks all public access to the RPM bucket |
+| S3 Encryption Config | Server-side encryption (AES256) for the RPM bucket |
+| S3 Objects (x2) | Declarative Onboarding and AS3 RPM files |
+| IAM Role | EC2 assume-role for S3 access |
+| IAM Role Policy | Grants `s3:GetObject` on the two RPM objects only |
+| IAM Instance Profile | Attaches the IAM role to the EC2 instance |
+
+## Automated Onboarding
+
+The BIG-IP is fully configured at first boot via the `f5_onboard.tmpl` cloud-init script:
+
+1. **Sets passwords** for root and admin accounts
+2. **Tunes system databases** (extra memory for restjavad, extended timeouts for iApps LX)
+3. **Writes the runtime-init config** (`/config/cloud/runtime-init-conf.yaml`) with static parameters for hostname, region, DNS, NTP, timezone, and credentials
+4. **Downloads F5 extensions** (DO and AS3 RPMs) from S3 using an inline Python script that mints IMDSv2 tokens and makes SigV4-signed requests -- no AWS CLI or boto3 required
+5. **Downloads and installs F5 BIG-IP Runtime Init** from GitHub
+6. **Applies Declarative Onboarding (DO)** configuration:
+   - **Applies BYOL license** via the `myLicense` class (`licenseType: regKey`)
+   - Sets system hostname
+   - Creates two admin users with SSH key access
+   - Hardens HTTPD (disables SSLv2, SSLv3, TLSv1)
+   - Configures DNS and NTP
+   - Provisions modules: LTM, ASM, AVR, APM, GTM (Best tier)
+   - Enables UI advisory banner
+7. **Installs AS3** extension (ready for declarations)
+
+### BYOL License Application
+
+The `byol_license` variable is passed into the onboarding template and applied via the DO `myLicense` class:
+
+```yaml
+myLicense:
+  class: License
+  licenseType: regKey
+  regKey: '<your-registration-key>'
+```
+
+The license is applied during the DO phase of onboarding. If the key is invalid or already in use, the DO declaration will fail -- check the onboarding log at `/var/log/cloud/startup-script.log`.
+
+### RPM Delivery: S3 + IAM Role
+
+Unlike the Azure projects which use blob storage with managed identity or SAS tokens, this project:
+
+- Uploads the DO and AS3 RPMs from `modules/bigip/rpm_files/` to a **private S3 bucket** at apply time
+- Grants the BIG-IP's **IAM instance profile** read-only access (`s3:GetObject`) scoped to the two RPM objects
+- The onboarding script uses a built-in Python helper (`s3_download.py`) that handles **IMDSv2 token retrieval** and **SigV4 request signing** using only Python stdlib
+
+### CrowdStrike Toggle
+
+`crowdstrike_enabled` (default `true`) drives the sensor install from one place in `terraform.tfvars`. It fans out to both consumers -- the artifact-lookup module (which resolves sensor blob URLs and mints a SAS token) and the bigip module (which gates the install block in the onboarding template).
+
+When disabled (`false`):
+- No CrowdStrike blob lookups, so no SAS token is written into state
+- The install block is removed from the rendered `user_data` by a `templatefile` `if` directive
+- `cs_cid`, `cs_tags_bigip`, and `cs_provisioning_token` can all stay empty
+
+When enabled with an empty `cs_cid`, or enabled in one module but not the other, the deploy fails at plan time via a precondition on `aws_instance.bigip` rather than twenty minutes into cloud-init.
+
+## Key Differences from PAYG Single-NIC
+
+| Feature | PAYG Single-NIC | BYOL Single-NIC |
+|---------|-----------------|------------------|
+| AMI search | `*BIGIP-17*PAYG-Best Plus 25Mbps*` | `*BIGIP-17*BYOL*` |
+| License | Included in AMI (hourly metered) | `byol_license` variable (F5 registration key, required) |
+| DO declaration | No `myLicense` block | `myLicense` class with `licenseType: regKey` |
+| Throughput | Baked into AMI (25 Mbps cap) | Determined by license key |
+| Template variable | -- | `license` passed to `f5_onboard.tmpl` |
+
+## Security Notes
+
+- **Do not commit `terraform.tfvars`** to version control -- it contains credentials, passwords, and the BYOL license key.
+- **No static AWS keys**: authentication uses SSO profiles or environment credentials, never `access_key`/`secret_key` variables.
+- The `byol_license` variable is marked **sensitive** -- Terraform will not display it in plan or apply output.
+- Management access (SSH, WebUI) is restricted to specific source CIDRs via security group rules.
+- The deployer's public IP is automatically detected and added to the admin allowlist.
+- HTTPD is hardened with strong TLS cipher suites (SSLv2, SSLv3, and TLSv1 are disabled).
+- The S3 RPM bucket is **fully private** (public access blocked) with **AES256 server-side encryption**.
+- RPM downloads use the BIG-IP's **IAM instance profile** with least-privilege S3 access (two specific objects only).
+- **IMDSv2 is required** (`http_tokens = "required"`) -- the onboarding template handles token minting correctly.
+- The root EBS volume is **encrypted by default**.
+- `source_dest_check` is disabled on the instance (required for single-NIC data-plane forwarding).
+- Editing `f5_onboard.tmpl` **rebuilds the instance** (`user_data_replace_on_change = true`) rather than silently updating a running instance that never re-reads user_data.
+
+## Cleanup
 
 ```bash
-aws ec2 describe-images --owners aws-marketplace \
-  --filters "Name=name,Values=*BIGIP-21*PAYG*" \
-  --query 'Images[].[Name,ImageId,CreationDate]' --output table
+terraform destroy
 ```
 
-Keep the patch level wildcarded. F5 deprecates and removes older AMIs, so a
-hard-pinned `17.1.1-0.0.4` will break a plan that worked last month.
-
-### 3. Set up credentials
-
-No `access_key` / `secret_key` variables exist in this project — the provider
-resolves credentials itself. Locally that means an IAM Identity Center
-profile. Create `~/.aws/config` (you do not currently have one):
-
-```ini
-[sso-session f5]
-sso_start_url           = https://<your-f5-portal>.awsapps.com/start
-sso_region              = us-east-1
-sso_registration_scopes = sso:account:access
-
-[profile bigip-lab]
-sso_session             = f5
-sso_account_id          = 123456789012
-sso_role_name           = <PermissionSetName>
-region                  = us-east-1
-```
-
-```bash
-aws sso login --profile bigip-lab
-aws sts get-caller-identity --profile bigip-lab
-```
-
-Then set `aws_profile = "bigip-lab"` in `terraform.tfvars`.
-
-IAM permissions: `PowerUserAccess` is the closest analog to the Contributor
-role the Azure service principal uses. It excludes IAM, which is fine here —
-nothing in this project creates a role or instance profile.
-
-### 4. Everything else
-
-```bash
-cp terraform.tfvars.boilerplate terraform.tfvars
-# fill it in, then
-terraform init && terraform plan
-```
-
-`../../modules/artifact-lookup` resolves the shared artifact store by name, so
-`BIG-IP Projects/artifact-store` must be applied before this project can plan.
-
----
-
-## Cross-cloud dependencies
-
-Three things stayed in Azure. This is a considered choice for a first AWS
-deployment, not an oversight: it keeps the variable under test to "does BIG-IP
-come up in EC2" rather than changing five things at once.
-
-| Dependency | Where it is | Why it stayed |
-|---|---|---|
-| `kulland.info` DNS zone | Azure DNS | The zone already exists and an A record pointing at an Elastic IP works the same from anywhere. Migrating means delegating a subzone to Route 53. |
-| Wildcard cert | Azure Key Vault | Moving to Secrets Manager also means giving the instance an IAM instance profile and reworking the runtime-init parameters. |
-| DO / AS3 / CrowdStrike artifacts | Azure blob storage | Fetched over HTTPS with a SAS token. Works identically from EC2 — `modules/artifact-lookup` is reused completely unchanged. |
-
-So the Azure service principal is still required in `terraform.tfvars`. The DNS
-record is named `bigip-1nic-aws` rather than the Azure project's `bigip-1nic`,
-because both would otherwise overwrite the same name in the shared zone.
-
----
-
-## What changed from the Azure project
-
-### Structural
-
-| Azure | Here |
-|---|---|
-| `azurerm_resource_group` | **Nothing.** AWS has no resource group. `project_name` + provider `default_tags` replace it as the grouping label, and there is no "delete the RG" escape hatch — teardown is entirely Terraform state. |
-| `azurerm_virtual_network` + `azurerm_subnet` | `aws_vpc` + `aws_subnet` **+ `aws_internet_gateway` + `aws_route_table` + `aws_route_table_association`** |
-| `azurerm_network_security_group` | `aws_security_group` — no priorities, stateful, and **egress is deny-all by default** |
-| `azurerm_public_ip` + `azurerm_network_interface` | `aws_eip` + `aws_eip_association` |
-| `azurerm_storage_account` (boot diagnostics) | Dropped. `aws ec2 get-console-output` is free and built in — see the `console_output_cmd` output. |
-| `source_image_reference` + `plan` | `data "aws_ami"` + a manual Marketplace subscription |
-| `client_id`/`client_secret`/`tenant_id`/`subscription_id` | `aws_region` + `aws_profile`. The account is implied by the credential; there is no subscription ID. |
-| `availability_zone = 1` | `availability_zone = "us-east-1a"` — AZ-scoped, immutable, pins the subnet |
-| `Standard_DS4_v2` | `m5.2xlarge` (8 vCPU / 32 GiB vs 8 / 28) |
-
-### Onboarding template
-
-`modules/bigip/f5_onboard.tmpl` is the Azure template with three changes. The
-DO declaration, both users, the httpd cipher list, the AS3 cert/TLS_Server and
-the entire CrowdStrike block are untouched.
-
-1. `runtime-init --cloud azure` → `--cloud aws`
-2. `HOST_NAME` is now a static value from `bigip-hostname` instead of an Azure
-   metadata lookup. AWS's compute name is the internal DNS name
-   (`ip-10-245-1-23`), which is not a hostname you want on a BIG-IP. This also
-   means `bigip-hostname` is finally wired up — the Azure projects declare it
-   but the template overrides it.
-3. `REGION` is a static value from `aws_region` instead of an IMDS `type: url`
-   fetch. IMDSv2 requires a PUT to mint a token before any metadata GET, and
-   runtime-init's `type: url` parameter only issues a plain GET. Passing the
-   value in from Terraform means the instance can keep
-   `http_tokens = "required"` instead of re-enabling IMDSv1.
-
-One bug fixed in passing: the Azure modules pass `var.ssh_publickey` — a
-*path* — into the template, so DO sets the literal string `~/.ssh/id_rsa.pub`
-as both users' authorized key. Here it is `trimspace(file(var.ssh_publickey))`.
-Worth fixing in the Azure projects too.
-
----
-
-## CrowdStrike toggle
-
-`crowdstrike_enabled` (default `true`) drives the sensor from one place in
-`terraform.tfvars`. It fans out to both consumers — `module "artifacts"`, which
-decides whether the sensor blobs are resolved and a SAS minted, and the `bigip`
-module, which gates the install block in the onboarding template.
-
-Off is a genuine opt-out rather than a runtime skip:
-
-- no CrowdStrike blob lookups, so no SAS token written into this project's state
-- the install block is removed from the rendered `user_data` by a `templatefile`
-  `if` directive, so the SAS-signed URLs and the CID never reach an instance
-  attribute readable via `ec2:DescribeInstanceAttribute`
-- `cs_cid`, `cs_tags_bigip` and `cs_provisioning_token` can all stay empty
-- a one-line "install skipped" note still lands in the startup log, so a device
-  with no sensor reads as deliberate
-
-It defaults to `true` on purpose — a security sensor that quietly fails to
-install is worse than an apply that stops to ask for a CID. Turning it on with
-an empty `cs_cid`, or on in one module but not the other, fails at plan time on
-a precondition attached to `aws_instance.bigip` rather than twenty minutes into
-cloud-init.
-
----
-
-## Gotchas
-
-**Onboarding fails silently when the VPC has no egress.** This is the one that
-will cost you an afternoon. Without the internet gateway, the default route, or
-the security group's egress rule, the BIG-IP boots fine and answers on 8443 —
-but `f5-bigip-runtime-init` can never reach GitHub, so DO and AS3 never install
-and the device comes up bare. There is no error anywhere in the Terraform
-output. Check:
-
-```bash
-terraform output -raw onboarding_log_tail   # then run it
-```
-
-**The GUI is on 8443, not 443.** On single-NIC, httpd cedes 443 to tmm so
-virtual servers can use it. Same as the Azure single-NIC projects.
-
-**Don't add VLANs or self-IPs to the DO declaration.** Management and data
-plane share eth0. `source_dest_check = false` on the instance is what lets that
-interface forward and SNAT traffic for addresses that are not its own.
-
-**PAYG throughput is baked into the AMI.** A 25 Mbps image caps at 25 Mbps
-regardless of instance type.
-
-**Editing `f5_onboard.tmpl` rebuilds the instance.** `user_data_replace_on_change
-= true` is set deliberately: the AWS provider would otherwise update the
-attribute in place on a running instance, where user_data is only ever read at
-first boot — making a template edit a silent no-op.
-
-**AMI upgrades need an explicit push.** `lifecycle { ignore_changes = [ami] }`
-stops `most_recent = true` from proposing an instance replacement every time F5
-publishes a release. To actually move versions:
-
-```bash
-terraform apply -replace='module.bigip.aws_instance.bigip'
-```
-
----
-
-## Not included
-
-- **GitHub Actions workflow.** The Azure projects each have one in
-  `.github/workflows/`. For AWS, replace the `azure/login@v2` step with OIDC —
-  `aws-actions/configure-aws-credentials@v4` with `role-to-assume`, plus
-  `permissions: id-token: write` — and leave `aws_profile` empty so the
-  environment credentials win. Power-off/on becomes
-  `aws ec2 stop-instances` / `start-instances`. One-time setup: an IAM OIDC
-  provider for `token.actions.githubusercontent.com` and a role whose trust
-  policy restricts `sub` to this repo. No repo secret needed, unlike the Azure
-  service principal.
-- **Ubuntu app servers.** The `Single-NIC-with-apps` and multi-NIC equivalents
-  of `modules/ubuntu` / `modules/internal-app`.
-- **Multi-NIC.** Adding interfaces on AWS means explicit `aws_network_interface`
-  resources plus an `aws_network_interface_attachment` per extra NIC, and the DO
-  declaration then does need VLANs and self-IPs.
+> **Note**: Unlike Azure, AWS has no resource group to delete as a single unit. All resources are tagged with `project` and `owner` via provider `default_tags` for easy identification. Use the `ec2_console_url` output to navigate directly to the instance, or filter the AWS console on the `project_name` tag to find all deployed resources.
+>
+> **BYOL licenses** are not automatically revoked on destroy. If you plan to reuse the registration key, revoke it from the F5 licensing portal before or after destroying the infrastructure.

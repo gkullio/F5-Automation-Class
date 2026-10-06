@@ -1,0 +1,121 @@
+# ===========================================================================
+# AWS Single-NIC BIG-IP
+#
+# Copy to terraform.tfvars and fill in. Deliberately close to the Azure
+# Single-NIC boilerplate so the two are diffable; see README.md for what
+# changed and why.
+# ===========================================================================
+
+# AWS targeting
+# Use the directory ~/.aws/credentials
+
+aws_region  = "us-east-1"
+aws_profile = "big-ip-aws-lab"
+
+# Global Variables
+
+project_name        = "bigip-aws-1nic"
+resourceOwner       = "g.kulland@f5.com"
+instance_size       = "m5.2xlarge"
+
+
+####### Module aws-vpc #######
+
+# Same address space as the Azure labs, on purpose -- the numbers stay
+# familiar and nothing here peers with anything there.
+#
+# availability_zone is a full AZ name, not Azure's bare number. AWS subnets
+# are AZ-scoped, and the AZ is immutable: changing it replaces the subnet and
+# takes the BIG-IP with it. Make sure it is an AZ in aws_region above.
+vpc_name                = "bigip-aws-1nic-vpc"
+vpc_cidr                = "10.245.0.0/16"
+mgmt_subnet_name        = "mgmt"
+mgmt_cidr               = "10.245.1.0/24"
+availability_zone       = "us-east-1a"
+
+####### Module BIG-IP VM #######
+
+vm_name                 = "bigip-aws-poc"
+instance_prefix         = "bigip-aws-poc-1"
+
+####### Networking source address lists  #######
+
+# Restrict Source IP Access to your IP address or range of IP addresses.
+# ***Recommended*** Use an array here
+# ["x.x.x.x/32"] for a single IP
+# ["x.x.x.x/32", "y.y.y.y/32"] to allow multiple IP addresses
+#
+# Your current public IP is detected at plan time and appended to
+# vpnMgmtSrcAddr automatically (see data "http" "my_ip" in main.tf), so you do
+# not need to add it by hand.
+#
+# vpnMgmtSrcAddr  -> SSH (22) and the management GUI (8443)
+# REtrafficSrcAddr -> virtual servers (80, 443, 8080, 8081)
+vpnMgmtSrcAddr          = ["104.219.105.84/32"]
+REtrafficSrcAddr        = ["104.219.105.84/32"]
+
+
+# BIG-IP VE specific variables for onboarding script
+
+# bigip-hostname is actually used on AWS, unlike in the Azure projects where
+# the onboarding template overrides it from instance metadata. Here it becomes
+# the DO hostname directly, as <bigip-hostname>.<dns_suffix>.
+bigip-hostname          = "bigip-aws-poc"
+ssh_publickey           = "~/.ssh/id_rsa.pub"
+
+# Replaces the Azure f5_product_name / f5_image_name / f5_version trio -- AWS
+# has one flat AMI name instead of publisher/offer/sku.
+#
+# *** Accept the AWS Marketplace offer for this image before your first apply.
+# *** One-time, per account, in the Marketplace console. This is the analog of
+# *** `az vm image terms accept`. Without it the apply dies with OptInRequired
+# *** at instance creation, after the VPC is already built.
+#
+# Confirm the exact names available in your region:
+#   aws ec2 describe-images --owners aws-marketplace \
+#     --filters "Name=name,Values=*BIGIP-17*PAYG*" \
+#     --query 'Images[].[Name,ImageId,CreationDate]' --output table
+#
+# Keep the patch level wildcarded: F5 removes old AMIs, which breaks plans
+# that pin an exact version. For BYOL use "*BIGIP-17*BYOL*" and add a regKey
+# to the DO declaration in modules/bigip/f5_onboard.tmpl.
+f5_ami_search_name      = "*BIGIP-21*PAYG-Best Plus 25Mbps*"
+f5_ami_owner            = "aws-marketplace"
+
+# Please create two users.
+# ***root account is locked out by default in the BIG-IP VE***
+f5_username             = "gage"
+f5_username_2           = "kulland"
+# Same password used for both users for the PoC
+f5_password             = "T3stP@ssw0rd"
+
+dns_suffix              = "pov.payg"
+dns_server              = "8.8.8.8"
+ntp_server              = "0.us.pool.ntp.org"
+timezone                = "US/Pacific"
+script_name             = "f5_onboard"
+INIT_URL                = "https://github.com/F5Networks/f5-bigip-runtime-init/releases/download/2.0.3/f5-bigip-runtime-init-2.0.3-1.gz.run"
+
+# DO_URL and AS3_URL are not set here. They come from the shared artifact
+# store via ../../modules/artifact-lookup -- bump the version in that module's
+# defaults, not here.
+
+####### Key Vault (Azure) #######
+
+key_vault_name          = "kulland-wildcard"
+key_vault_rg            = "kulland-house-keys"
+
+####### CrowdStrike Falcon sensor #######
+
+# To turn the sensor on: fill in cs_cid and cs_tags_bigip, then flip this true.
+crowdstrike_enabled     = false
+
+# 32 hex characters, a hyphen, then the 2-character checksum.
+cs_cid                  = ""
+
+# Comma-separated. Tags may not contain spaces or commas, so key/value pairs
+# are encoded with '/'.
+cs_tags_bigip           = ""
+
+# Leave empty unless the CID requires an installation token.
+cs_provisioning_token   = ""
