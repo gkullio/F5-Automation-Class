@@ -19,8 +19,6 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = [var.int_address_space]
 }
 
-
-
 # Create management public IP
 resource "azurerm_public_ip" "management_pubip" {
   name                = "ubuntu-management_pubip"
@@ -54,6 +52,7 @@ resource "azurerm_network_security_group" "management_nsg" {
     source_address_prefixes    = var.adminSrcAddr
     destination_address_prefix = "*"
   }
+
   tags = {
     owner = var.resourceOwner
   }  
@@ -75,6 +74,7 @@ resource "azurerm_network_security_group" "internal_nsg" {
     source_address_prefixes    = var.adminSrcAddr
     destination_address_prefix = "*"
   }
+
   tags = {
     owner = var.resourceOwner
   }
@@ -107,41 +107,15 @@ resource "azurerm_network_interface" "internal_nic" {
     public_ip_address_id          = azurerm_public_ip.internal_pubip.id
     primary                       = true
   }
-  ip_configuration {
-    name                          = "application_public_private_ip_1"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.100"
-  }
-  ip_configuration {
-    name                          = "application_public_private_ip_2"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.101"
-  }
-  ip_configuration {
-    name                          = "application_public_private_ip_3"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.102"
-  }
-  ip_configuration {
-    name                          = "application_public_private_ip_4"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.103"
-  }
-  ip_configuration {
-    name                          = "application_public_private_ip_5"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.104"
-  }
-  ip_configuration {
-    name                          = "application_public_private_ip_6"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"
-    private_ip_address            = "10.245.2.105"
+
+  dynamic "ip_configuration" {
+    for_each = range(1, 7)
+    content {
+      name                          = "application_public_private_ip_${ip_configuration.value}"
+      subnet_id                     = azurerm_subnet.internal.id
+      private_ip_address_allocation = "Static"
+      private_ip_address            = "10.245.2.${99 + ip_configuration.value}"
+    }
   }
 }
 

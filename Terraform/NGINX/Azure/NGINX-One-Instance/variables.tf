@@ -76,7 +76,3 @@ variable "dp_token" {
   type        = string
   description = "The NGINX Data Plane token."
 }
-variable "le_email" {
-  type = string
-  description = "Email for Let's Encrypt email registration"
-}

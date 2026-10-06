@@ -1,15 +1,17 @@
 # Create virtual machine
-data "template_file" "custom_script" {
-  template = file("${path.module}/k8s.tpl")
-}
+
 resource "azurerm_linux_virtual_machine" "kulland_ubuntu_vm" {
   name                  = "kulland-k8s-vm"
   location              = azurerm_resource_group.rg.location
   resource_group_name   = azurerm_resource_group.rg.name
-  network_interface_ids = [azurerm_network_interface.management_nic.id, azurerm_network_interface.internal_nic.id]
-  size                  = var.instance_size
-  #custom_data           = filebase64("${path.module}/nginx.tpl")
-  custom_data = base64encode(data.template_file.custom_script.rendered)
+  network_interface_ids = [
+    azurerm_network_interface.management_nic.id,
+    azurerm_network_interface.internal_nic.id
+  ]
+  size        = var.instance_size
+  custom_data = base64encode(templatefile("${path.module}/scripts/k8s.tpl", {
+    username = var.username
+  }))
 
   os_disk {
     name                 = "myOsDisk"
@@ -19,7 +21,7 @@ resource "azurerm_linux_virtual_machine" "kulland_ubuntu_vm" {
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "ubuntu-26_04-lts"
+    offer     = "ubuntu-24_04-lts"
     sku       = "server"
     version   = "latest"
   }

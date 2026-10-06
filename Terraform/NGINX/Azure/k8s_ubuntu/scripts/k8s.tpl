@@ -45,33 +45,33 @@ apt-mark hold kubelet kubeadm kubectl
 kubeadm init --pod-network-cidr=10.244.0.0/16
 
 # --- kubeconfig for the default user ---
-mkdir -p /home/gage/.kube
-cp -i /etc/kubernetes/admin.conf /home/gage/.kube/config
-chown gage:gage /home/gage/.kube/config
+mkdir -p /home/${username}/.kube
+cp -i /etc/kubernetes/admin.conf /home/${username}/.kube/config
+chown ${username}:${username} /home/${username}/.kube/config
 
 # --- CNI (Flannel) ---
-su - gage -c "kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml"
+su - ${username} -c "kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml"
 
 # allow scheduling on control-plane node (single-node lab)
 sleep 15
-su - gage -c "kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true"
+su - ${username} -c "kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true"
 
 # --- metrics-server (required for HPA) ---
-su - gage -c "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+su - ${username} -c "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
 
 # wait for the deployment object to exist before patching it
 sleep 10
-su - gage -c "kubectl -n kube-system patch deployment metrics-server --type='json' -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--kubelet-insecure-tls\"}]'"
+su - ${username} -c "kubectl -n kube-system patch deployment metrics-server --type='json' -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--kubelet-insecure-tls\"}]'"
 
 # wait for metrics-server to actually come up before applying the HPA
-su - gage -c "kubectl -n kube-system wait --for=condition=available --timeout=120s deployment/metrics-server"
+su - ${username} -c "kubectl -n kube-system wait --for=condition=available --timeout=120s deployment/metrics-server"
 
 # --- helm ---
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # --- generate reusable join command for workers ---
 
-kubeadm token create --print-join-command > /home/gage/join-command.sh
-chmod +x /home/gage/join-command.sh
+kubeadm token create --print-join-command > /home/${username}/join-command.sh
+chmod +x /home/${username}/join-command.sh
 
-echo "Control plane setup complete. Join command saved to /home/gage/join-command.sh"
+echo "Control plane setup complete. Join command saved to /home/${username}/join-command.sh"

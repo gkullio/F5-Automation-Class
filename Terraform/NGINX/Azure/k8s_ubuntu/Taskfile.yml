@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize Terraform and upgrade providers/modules
+    cmds:
+      - terraform init
+
+  validate:
+    desc: Validate Terraform configuration
+    cmds:
+      - terraform validate
+
+  plan:
+    desc: Generate and save an execution plan
+    cmds:
+      - terraform plan -out=tfplan
+
+  apply:
+    desc: Apply the generated execution plan
+    cmds:
+      - terraform apply "tfplan"
+      # Optional: clean up the plan file after successful apply
+      - cmd: rm -f tfplan
+        ignore_error: true
+
+  deploy:
+    desc: Full pipeline - init, validate, plan, and apply sequentially
+    cmds:
+      - task: init
+      - task: validate
+      - task: plan
+      - task: apply
+
+  destroy:
+    desc: Validate Terraform configuration
+    cmds:
+      - terraform destroy --auto-approve

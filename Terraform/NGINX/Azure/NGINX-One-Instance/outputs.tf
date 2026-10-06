@@ -16,7 +16,12 @@ output "Management_Interface_Outputs" {
   value = {
     Management_Public_IP    = "ssh -i ~/.ssh/id_rsa ${var.username}@${azurerm_linux_virtual_machine.kulland_ubuntu_vm.public_ip_address}"
     Management_Private_IP   = azurerm_network_interface.management_nic.private_ip_address
-    
+  }
+}
+
+output "App_Access" {
+  value = {
+    Public_App_Access       = "http://${azurerm_linux_virtual_machine.kulland_ubuntu_vm.public_ip_address}"
   }
 }
 

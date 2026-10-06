@@ -1,11 +1,9 @@
 # IP addresses contain F5 VPN, RE, and DNSLB addresses
 # This is an array and can be added to as needed
-# add your own IP within the quotes and separated by a comma
-# ipv4.icanhazip.com can be used to find your public IP address
-adminSrcAddr                = [""]
-instance_size               = "Standard_DC1s_v2"
+adminSrcAddr                = ""
+instance_size               = "Standard_D8ads_v7"
 hostname                    = ""
-resourceOwner               = ""   # Email address
+resourceOwner               = "your@email.address"
 username                    = ""
 password                    = ""
 vnet_name                   = ""
@@ -14,11 +12,7 @@ mgmt_subnet_name            = "mgmt"
 mgmt_address_space          = "10.245.1.0/24"
 int_subnet_name             = "int"
 int_address_space           = "10.245.2.0/24"
-# Keep this IP scheme or you will need to change the values within the nginx.tpl and config/demoapp.conf files
 
 # Resource Group Information
-resource_group_location     = "westus2"
+resource_group_location     = "westus2" # OPTIONS westus2, eastus2, eastus, centralus, southcentralus, northeurope, westeurope, canadacentral, canadaeast
 resource_group_name_prefix  = ""
-
-# Instance NGINX Data Plane Token
-dp_token                    = ""

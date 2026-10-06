@@ -91,26 +91,28 @@ resource "azurerm_network_security_group" "management_nsg" {
   }  
 }
 
-# resource "azurerm_network_security_group" "internal_nsg" {
-#   name                = "Kulland-internal-NSG"
-#   location            = azurerm_resource_group.rg.location
-#   resource_group_name = azurerm_resource_group.rg.name
+/*
+resource "azurerm_network_security_group" "internal_nsg" {
+  name                = "Kulland-internal-NSG"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-#   security_rule {
-#     name                       = "Application-Access"
-#     priority                   = 1001
-#     direction                  = "Inbound"
-#     access                     = "Allow"
-#     protocol                   = "Tcp"
-#     source_port_range          = "*"
-#     destination_port_ranges    = ["443", "80", "8080", "8443"]
-#     source_address_prefixes    = var.adminSrcAddr
-#     destination_address_prefix = "*"
-#   }
-#   tags = {
-#     owner = var.resourceOwner
-#   }
-# }  
+  security_rule {
+    name                       = "Application-Access"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_ranges    = ["443", "80", "8080", "8443"]
+    source_address_prefixes    = var.adminSrcAddr
+    destination_address_prefix = "*"
+  }
+  tags = {
+    owner = var.resourceOwner
+  }
+}  
+*/
 
 # Create network interface
 resource "azurerm_network_interface" "management_nic" {
@@ -126,28 +128,28 @@ resource "azurerm_network_interface" "management_nic" {
   }
 }
 
-# resource "azurerm_network_interface" "internal_nic" {
-#   name                = "internal-nic"
-#   location            = azurerm_resource_group.rg.location
-#   resource_group_name = azurerm_resource_group.rg.name
+resource "azurerm_network_interface" "internal_nic" {
+  name                = "internal-nic"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-#   ip_configuration {
-#     name                          = "internal_nic_configuration"
-#     subnet_id                     = azurerm_subnet.internal.id
-#     private_ip_address_allocation = "Static"
-#     private_ip_address            = "10.245.2.99"
-#     public_ip_address_id          = azurerm_public_ip.internal_pubip.id
-#     primary                       = true
-#   }
-# }
+  ip_configuration {
+    name                          = "internal_nic_configuration"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Static"
+    private_ip_address            = "10.245.2.99"
+    primary                       = true
+  }
+}
 
 # Connect the security group to the network interface
 resource "azurerm_network_interface_security_group_association" "mgmt" {
   network_interface_id      = azurerm_network_interface.management_nic.id
   network_security_group_id = azurerm_network_security_group.management_nsg.id
 }
-
-# resource "azurerm_network_interface_security_group_association" "internal" {
-#   network_interface_id      = azurerm_network_interface.internal_nic.id
-#   network_security_group_id = azurerm_network_security_group.internal_nsg.id
-# }
+/*
+resource "azurerm_network_interface_security_group_association" "internal" {
+  network_interface_id      = azurerm_network_interface.internal_nic.id
+  network_security_group_id = azurerm_network_security_group.internal_nsg.id
+}
+*/
