@@ -1,19 +1,21 @@
-# Global Variables
+#################################################
+####### Global Values #######
+#################################################
+
+## Azure & BigIP Global Values ##
 rg_name                     = ""
 resourceOwner               = ""
 ownerEmail                  = ""
 location                    = "westus2"
 instance_size               = "Standard_D8s_v5"
+tenant                      = "f5-amer-ent"
 
-# Azure Credentials #
-client_id                   = ""
-client_secret               = ""
-tenant_id                   = ""
-subscription_id             = ""
 
+#################################################
 ####### Module app-service #######
+#################################################
 
-app_name                    = "demo-app-container"
+app_name                    = ""
 create_service_plan         = true
 service_plan_name           = ""
 sku_name                    = "B1"
@@ -25,28 +27,31 @@ https_only                  = false
 existing_service_plan_id    = null
 extra_app_settings          = null
 
-
+#################################################
 ####### Module azure-vnet #######
+#################################################
 
 vnet_name                   = ""
 vnet_address_space          = "10.245.0.0/16"
 mgmt_subnet_name            = "mgmt"
 mgmt_address_space          = "10.245.1.0/24"
 
-####### Module BIG-IP / bigip.tf  #######
+#################################################
+####### Module bigip   #######
+#################################################
 
-vm_name                     = "bigip-1nic"
+vm_name                     = ""
 instance_prefix             = ""
 bigip-username              = "testuser"
 bigip-password              = "T3stP@ssw0rd"
 
-####### Networking source address lists  #######
+## Networking source address lists  ##
 
-vpnMgmtSrcAddr              = ["104.219.107.0/25", "104.219.106.0/25", "104.219.104.0/21", "106.38.0.192/29", "106.38.20.192/28", "50.237.173.32/29", "50.236.107.0/28", "172.85.45.72/29", "162.220.44.16/28", "189.201.174.80/29", "189.201.174.96/28", "201.168.199.104/29", "201.168.196.176/28", "1.6.70.48/28", "115.110.154.64/28", "104.219.108.0/25", "104.219.109.0/25", "104.219.104.0/25", "104.219.105.0/25", "42.61.112.48/28", "4.18.241.192/26", "209.189.196.192/26", "203.47.24.240/28", "210.226.41.192/27", "62.90.170.80/28", "84.108.132.208/28"]
-REtrafficSrcAddr            = ["5.182.215.0/25", "84.54.61.0/25", "23.158.32.0/25", "84.54.62.0/25", "185.94.143.0/25", "185.94.142.0/24", "159.60.190.0/24", "159.60.168.0/24", "159.60.180.0/24", "159.60.174.0/24", "159.60.175.0/24", "159.60.176.0/24", "159.60.177.0/24", "159.60.179.0/24", "159.60.181.0/24", "159.60.183.0/24", "5.182.213.0/24", "5.182.212.0/25", "5.182.214.0/25", "84.54.60.0/25", "185.56.154.0/25", "159.60.160.0/24", "159.60.161.0/24", "159.60.162.0/24", "159.60.163.0/24", "159.60.188.0/24", "159.60.182.0/24", "159.60.178.0/24", "103.135.56.0/24", "103.135.57.0/25", "103.135.59.0/25", "103.135.58.0/24", "159.60.189.0/24", "159.60.166.0/24", "159.60.164.0/24", "159.60.170.0/24", "159.60.172.0/24", "159.60.191.0/24", "159.60.184.0/24", "159.60.185.0/24", "159.60.186.0/24"]
+vpnMgmtSrcAddr              = ["1.6.70.48/28", "4.18.241.192/26", "42.61.112.48/28", "50.236.107.0/28", "50.237.173.32/29", "62.90.170.80/28", "84.108.132.208/28", "104.219.104.0/21", "106.38.0.192/29", "106.38.20.192/28", "115.110.154.64/28", "162.220.44.16/28", "172.85.45.72/29", "189.201.174.80/29", "189.201.174.96/28", "201.168.196.176/28", "201.168.199.104/29", "203.47.24.240/28", "209.189.196.192/26", "210.226.41.192/27"]
+REtrafficSrcAddr            = ["5.182.212.0/25", "5.182.213.0/24", "5.182.214.0/25", "5.182.215.0/25", "23.158.32.0/25", "84.54.60.0/25", "84.54.61.0/25", "84.54.62.0/25", "103.135.56.0/24", "103.135.57.0/25", "103.135.58.0/24", "103.135.59.0/25", "159.60.160.0/22", "159.60.164.0/24", "159.60.166.0/24", "159.60.168.0/24", "159.60.170.0/24", "159.60.172.0/24", "159.60.174.0/23", "159.60.176.0/21", "159.60.184.0/23", "159.60.186.0/24", "159.60.188.0/22", "185.56.154.0/25", "185.94.142.0/24", "185.94.143.0/25"]
 
-# BIG-IP VE specific variables for onboarding script
-bigip-hostname              = "kulland-bigip"
+##  BIG-IP VE specific variables for onboarding script ##
+bigip-hostname              = ""
 ssh_publickey               = "~/.ssh/id_rsa.pub"
 f5_product_name             = "f5-big-ip-best"
 f5_image_name               = "f5-big-best-plus-hourly-25mbps"
@@ -60,4 +65,373 @@ availability_zone           = 1
 ntp_server                  = "0.us.pool.ntp.org"
 timezone                    = "US/Pacific"
 script_name                 = "f5_onboard"
-enable_ssh_key              = false
+disable_ssh_key             = true
+
+#################################################
+####### Module distributed_cloud  #######
+#################################################
+
+## Distributed Cloud Global Values ## 
+xc_api_url                  = "https://f5-amer-ent.console.ves.volterra.io/api"
+xc_api_creds                = ""
+my_name                     = ""
+xc_namespace                = ""
+
+##################################################################################################
+####### Module distributed_cloud/Web Application Firewall (waap)  #######
+##################################################################################################
+
+app_fw_name                                         = ""
+
+# Feature Toggles
+# WAF Enforcement mode (blocking or monitoring)
+enforcement_mode                                    = "blocking"
+
+# Allowed Response Codes 
+# allow_all_response_codes = true   - All HTTP response codes allowed (DEFAULT)
+allow_all_response_codes                            = false
+
+# if allow_all_response_codes = false  - Provide an iterative list of what HTTP response codes are allowed.
+allowed_response_codes                              = [200, 201, 202, 300, 301, 302, 400, 401, 403, 404, 503]
+
+# Mask Sensitive Parameters in Logs
+# Options: "default", "disabled", or "custom"
+anonymization_mode                                  = "default"
+custom_anonymization_configs = [
+  {
+    cookie_name = "session_id"
+  },
+  {
+    header_name = "Authorization"
+  },
+  {
+    query_param_name = "password"
+  },
+  {
+    query_param_name = "api_key"
+  }
+]
+
+use_default_blocking_page                           = true
+
+# AI Enhancements Settings
+disable_ai_enhancements                             = true
+enable_ai_enhancements                              = true
+ai_mitigate_high_medium_risk_action                 = true
+ai_mitigate_high_risk_action                        = true
+detection_default_bot_setting                       = true
+detection_enable_suppression = true
+detection_default_attack_type_settings = true
+detection_high_medium_low_accuracy_signatures = true
+detection_disable_staging = true
+detection_enable_threat_campaigns = true
+
+#### Use default WAF settings or override them with custom values
+# true = DEFAULT SETTINGS - Default settings for WAF, basic but effective.
+
+# false = CUSTOM SETTING - Iterative selections based on category
+use_default_detection_settings                      = false
+
+#### --- if False you can customize the following settings --- ####
+
+# 1. Bot Detection Settings ('default' or 'custom')
+# Bot actions (IGNORE, REPORT, or BLOCK)
+bot_setting_mode                                    = "custom"
+good_bot_action                                     = "IGNORE"
+suspicious_bot_action                               = "REPORT"
+malicious_bot_action                                = "BLOCK"
+
+# 2. Attack Signature Staging ('disabled', 'stage_new_and_updated', or 'stage_new_only')
+staging_mode                                        = "disabled"
+staging_period_days                                 = 7
+
+# 3. Threat Campaigns
+enable_threat_campaigns                             = true
+
+# 4. Automatic Attack Signature Tuning (Suppression)
+enable_suppression                                  = true
+
+# 5. Attack Types
+use_default_attack_types                            = true
+disabled_attack_types                               = [] # e.g. ["ATTACK_TYPE_SQL_INJECTION"] when use_default_attack_types = false
+
+# 6. Signature Selection by Accuracy ('high_medium_low', 'high_medium', or 'only_high')
+accuracy_signature_selection                        = "high_medium_low"
+
+###########
+# This is the interative list of violations if you want make changes to any.
+# This is the DEFAULT list.  Change the "enabled" with boolean value (true or false)
+# true  = enaled
+# false = disabled
+
+violations_list = [
+
+# This section is for the violations that are DISABLED by default 
+  {
+    name               = "VIOL_HTTP_PROTOCOL_BAD_MULTIPART_FORMDATA_REQUEST_PARSING"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "Bad Multipart/Form-Data request parsing"
+    description        = "Multipart/Form-Data requests cannot be parsed correctly."
+  }, 
+  {
+    name               = "VIOL_EVASION_BAD_UNESCAPE"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "Bad unescape"
+    description        = "Improper unescaping of data is used as an evasion technique."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_BODY_IN_GET_OR_HEAD_REQUEST"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "Body in GET or HEAD request"
+    description        = "A body is present in GET or HEAD requests."
+  },
+  {
+    name               = "VIOL_COOKIE_MALFORMED"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "Cookie not RFC-compliant"
+    description        = "A cookie does not conform to the expected format."
+  },
+  {
+    name               = "VIOL_ENCODING"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "Failed to convert character"
+    description        = "The encoding specified in a request is not valid."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_HIGH_ASCII_CHARACTERS_IN_HEADERS"
+    enabled            = false
+    enabled_by_default = "No"
+    title              = "High ASCII characters in headers"
+    description        = "High ASCII characters are found in HTTP headers, potentially indicating obfuscation or injection."
+  },
+
+# This section is for the violations that are ENABLED by default
+  {
+    name               = "VIOL_EVASION_APACHE_WHITESPACE"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Apache whitespace"
+    description        = "Excessive or irregular whitespace is used in requests, potentially to evade security mechanisms."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_BAD_HTTP_VERSION"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Bad HTTP version"
+    description        = "An HTTP request specifies an unsupported or unrecognized HTTP version."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_BAD_HOST_HEADER_VALUE"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Bad Host header value"
+    description        = "The Host header value in an HTTP request is invalid or suspicious."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_BAD_MULTIPART_PARAMETERS_PARSING"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Bad multipart parameters parsing"
+    description        = "Multipart parameters in an HTTP request are not parsed correctly."
+  },
+  {
+    name               = "VIOL_EVASION_BARE_BYTE_DECODING"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Bare byte decoding"
+    description        = "Bare byte decoding is used, potentially to evade detection."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_CRLF_CHARACTERS_BEFORE_REQUEST_START"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "CRLF characters before request start"
+    description        = "CRLF (Carriage-Return Line-Feed) characters appear before the start of an HTTP request."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_CONTENT_LENGTH_SHOULD_BE_A_POSITIVE_NUMBER"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Content-Length should be a positive number"
+    description        = "The Content-Length specified in an HTTP request is not a positive number."
+  },
+  {
+    name               = "VIOL_COOKIE_MODIFIED"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Cookie modified"
+    description        = "A cookie is modified in a way that violates the security policy."
+  },
+  {
+    name               = "VIOL_EVASION_DIRECTORY_TRAVERSALS"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Directory traversal"
+    description        = "A user attempts directory traversal to access unauthorized directories."
+  },
+  {
+    name               = "VIOL_FILE_UPLOAD"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Disallowed file upload content detected"
+    description        = "A binary executable file upload is detected in a parameter."
+  },
+  {
+    name               = "VIOL_FILE_UPLOAD_IN_BODY"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Disallowed file upload content detected in body"
+    description        = "A binary executable file upload is detected in the request body."
+  },
+  {
+    name               = "VIOL_EVASION_IIS_BACKSLASHES"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "IIS backslashes"
+    description        = "Backslashes are used in a request to evade IIS security filters."
+  },
+  {
+    name               = "VIOL_EVASION_IIS_UNICODE_CODEPOINTS"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "IIS unicode codepoints"
+    description        = "Unicode code points are used to evade IIS (Internet Information Services) security filters."
+  },
+  {
+    name               = "VIOL_FILETYPE"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Illegal filetype"
+    description        = "A user attempts to upload a file type not permitted by the security policy."
+  },
+  {
+    name               = "VIOL_METHOD"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Illegal method"
+    description        = "A user employs an HTTP method not allowed by the security policy."
+  },
+  {
+    name               = "VIOL_JSON_MALFORMED"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Malformed JSON data"
+    description        = "JSON data in a request is improperly formatted."
+  },
+  {
+    name               = "VIOL_XML_MALFORMED"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Malformed XML data"
+    description        = "XML data in a request is improperly formatted or structured."
+  },
+  {
+    name               = "VIOL_MALFORMED_REQUEST"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Malformed request"
+    description        = "The request does not conform to the HTTP protocol format."
+  },
+  {
+    name               = "VIOL_MANDATORY_HEADER"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Mandatory HTTP header is missing"
+    description        = "A request lacks a header configured as mandatory in the security policy."
+  },
+  {
+    name               = "VIOL_ASM_COOKIE_MODIFIED"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Modified WAF cookie"
+    description        = "The WAF (Web Application Firewall) cookie has been tampered with."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_MULTIPLE_HOST_HEADERS"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Multiple Host headers"
+    description        = "Multiple Host headers are found in a single HTTP request."
+  },
+  {
+    name               = "VIOL_EVASION_MULTIPLE_DECODING"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Multiple decoding"
+    description        = "Multiple encodings are used to bypass the security policy."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_NO_HOST_HEADER_IN_HTTP_1_1_REQUEST"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "No Host header in HTTP/1.1 request"
+    description        = "An HTTP/1.1 request lacks a mandatory Host header."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_NULL_IN_REQUEST"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Null in request"
+    description        = "A request contains null characters, which may indicate an attempt to exploit a vulnerability."
+  },
+  {
+    name               = "VIOL_EVASION_PERCENT_U_DECODING"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Percent U decoding"
+    description        = "Percent-u decoding is used in an attempt to bypass security measures."
+  },
+  {
+    name               = "VIOL_REQUEST_MAX_LENGTH"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Request length exceeds defined buffer size"
+    description        = "A request exceeds the maximum length defined by the security policy."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_SEVERAL_CONTENT_LENGTH_HEADERS"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Several Content-Length headers"
+    description        = "Multiple Content-Length headers are present in an HTTP request."
+  },
+  {
+    name               = "VIOL_HTTP_PROTOCOL_UNPARSABLE_REQUEST_CONTENT"
+    enabled            = true
+    enabled_by_default = "Yes"
+    title              = "Unparsable request content"
+    description        = "The content of an HTTP request cannot be parsed by the system parser."
+  }
+]
+
+
+##################################################################################################
+####### Module distributed_cloud/HTTP Load Balancer (http_lb.tf)  #######
+##################################################################################################
+
+delegated_dns_domain                    = ""
+
+# IP Reputation
+# true / false boolean descision. 
+# If false, no IP Reputation used
+# If True, IP Reputation is used and you can pick from the list of categories to protect against
+enable_ip_reputation                    = true
+ip_threat_categories                    = [
+        "SPAM_SOURCES",
+        "WINDOWS_EXPLOITS",
+        "WEB_ATTACKS",
+        "BOTNETS",
+        "SCANNERS",
+        "DENIAL_OF_SERVICE",
+        "REPUTATION",
+        "PHISHING",
+        "PROXY",
+        "NETWORK",
+        "TOR_PROXY",
+        "MOBILE_THREATS"
+        ]

@@ -10,6 +10,8 @@
 # USAGE EXAMPLES:
 #   1. Deploy / Update application (Default execution):
 #      ansible-playbook playbook.yaml
+#      - OR with extra-vars -
+#      ansible-playbook playbook.yaml -e "ansible_host=10.245.1.4 ansible_httpapi_password=MyPassword!"
 #      - OR explicitly using tags -
 #      ansible-playbook playbook.yaml --tags deploy
 #
@@ -18,7 +20,7 @@
 #
 # EXPECTATIONS:
 #   - Deploy:
-#       Submits the AS3 declaration in 'demoapp-as3.json' to the BIG-IP.
+#       Submits the AS3 declaration rendered from 'demoapp-as3.j2' to the BIG-IP.
 #       Creates/updates the 'Demo_Application' tenant, HTTPS virtual server,
 #       iRule, HTTP profile, and backend pool.
 #       Expected result: changed=1 on initial run or updates, changed=0 if in sync.
@@ -35,32 +37,46 @@
 
   # Connection & Authentication details for BIG-IP Management Interface
   vars:
-    ansible_host: 20.59.15.245
-    ansible_user: gage
-    ansible_httpapi_password: WOLF0359
-    ansible_httpapi_port: 8443
+    # --- BIG-IP Connection & Authentication ---
+    # Can be set via environment variables (BIGIP_HOST, BIGIP_USER, BIGIP_PASS, BIGIP_PORT)
+    # or overridden with -e / extra-vars (e.g., -e "ansible_host=... ansible_httpapi_password=...")
+    ansible_host: "{{ lookup('env', 'BIGIP_HOST') }}"
+    ansible_user: "{{ lookup('env', 'BIGIP_USER') | default('admin', true) }}"
+    ansible_httpapi_password: "{{ lookup('env', 'BIGIP_PASS') | default('', true) }}"
+    ansible_httpapi_port: "{{ lookup('env', 'BIGIP_PORT') | default(443, true) }}"
     ansible_network_os: f5networks.f5_bigip.bigip
     ansible_httpapi_use_ssl: yes
     ansible_httpapi_validate_certs: no
 
+    # --- AS3 Application Configuration ---
+    as3_tenant_name: "Demo_Application"
+    as3_app_name: "demoapp-ansible"
+    as3_vip_address: ""
+    as3_vip_port: 443
+    as3_pool_member_ip: ""
+    as3_pool_port: 80
+    # This is for the iRule logic to successfully access the Azure App Service
+    # Inserts the domain of the Azure App Service
+    as3_backend_hostname: "demo-app-kulland-154.azurewebsites.net"
+
   tasks:
     # --------------------------------------------------------------------------
     # Task 1: Deploy or Update
-    # Reads 'demoapp-as3.json' and sends declaration via REST API (port 8443).
+    # Renders 'demoapp-as3.j2' template and sends declaration via REST API.
     # Runs by default when no tags are specified.
     # --------------------------------------------------------------------------
     - name: Deploy or Update AS3
       f5networks.f5_bigip.bigip_as3_deploy:
-        content: "{{ lookup('file', 'demoapp-as3.json') }}"
+        content: "{{ lookup('template', 'demoapp-as3.j2') }}"
       tags: [ deploy ]
 
     # --------------------------------------------------------------------------
     # Task 2: Delete / Teardown
-    # Removes tenant 'Demo_Application' and all associated configurations.
+    # Removes the tenant and all associated configurations.
     # The 'never' tag ensures this task ONLY executes when '--tags delete' is passed.
     # --------------------------------------------------------------------------
     - name: Delete AS3 Deployment
       f5networks.f5_bigip.bigip_as3_deploy:
-        tenant: Demo_Application
+        tenant: "{{ as3_tenant_name }}"
         state: absent
-      tags: [ never, delete ]
+      tags: [ never, delete ]
