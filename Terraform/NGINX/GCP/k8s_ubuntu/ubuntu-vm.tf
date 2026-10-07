@@ -1,8 +1,4 @@
 # Create GCE instance
-data "template_file" "custom_script" {
-  template = file("${path.module}/k8s.tpl")
-}
-
 resource "google_compute_instance" "k8s_vm" {
   name         = var.hostname
   machine_type = var.machine_type
@@ -10,7 +6,7 @@ resource "google_compute_instance" "k8s_vm" {
 
   boot_disk {
     initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2604-lts"
+      image = "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
       size  = 30
       type  = "pd-ssd"
     }
@@ -58,7 +54,9 @@ resource "google_compute_instance" "k8s_vm" {
     ssh-keys = "${var.username}:${file("~/.ssh/id_rsa.pub")}"
   }
 
-  metadata_startup_script = data.template_file.custom_script.rendered
+  metadata_startup_script = templatefile("${path.module}/scripts/k8s.tpl", {
+    username = var.username
+  })
 
   tags = ["k8s-vm"]
 

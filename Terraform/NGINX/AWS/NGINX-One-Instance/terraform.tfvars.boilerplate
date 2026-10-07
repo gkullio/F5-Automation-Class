@@ -16,6 +16,7 @@ aws_region          = "us-west-2"
 vpc_cidr            = "10.245.0.0/16"
 mgmt_subnet_cidr    = "10.245.1.0/24"
 int_subnet_cidr     = "10.245.2.0/24"
+# Keep this IP scheme or you will need to change the values within the nginx.tpl and config/demoapp.conf files
 
 # VM
 instance_type       = "t3.medium"
@@ -25,7 +26,3 @@ username            = ""
 
 # Instance NGINX Data Plane Token
 dp_token            = ""
-
-# Let's Encrypt Email Variable
-# This is needed for Let's Encrypt to create a certificate.
-le_email            = ""

@@ -1,7 +1,3 @@
-variable "gcp_project" {
-  type        = string
-  description = "GCP project ID to deploy resources in."
-}
 variable "gcp_region" {
   type        = string
   description = "GCP region (e.g. us-central1)."
@@ -51,10 +47,7 @@ variable "dp_token" {
   type        = string
   description = "The NGINX Data Plane token."
 }
-variable "le_email" {
-  type        = string
-  description = "Email for Let's Encrypt email registration"
-}
+
 
 variable terraform_sa_email {
   type        = string

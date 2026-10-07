@@ -1,0 +1,55 @@
+{
+         "class": "AS3",
+            "action": "deploy",
+            "persist": true,
+            "declaration": {
+                "class": "ADC",
+                "schemaVersion": "3.0.0",
+                "label": "Test 1",
+                "remark": "Test Demoapp deployment",
+                "Demo_Application": {
+                    "class": "Tenant",
+                    "demoapp-ansible": {
+                        "class": "Application",
+                        "demo_app_https_vs": {
+                            "class": "Service_HTTPS",
+                            "virtualAddresses": [ "10.245.1.4" ],
+                            "virtualPort": 443,
+                            "shareAddresses": true,
+                            "iRules": [
+                                "rule_client_xff_replace_host"
+                            ],
+                            "profileHTTP": {
+                                "use": "http_xff"
+                            },
+                            "serverTLS": {
+                                "bigip": "/Common/clientssl"
+                            },
+                            "pool": "demo_app_http_pool"
+                        },
+                        "rule_client_xff_replace_host": {
+                            "class": "iRule",
+                            "iRule": "when HTTP_REQUEST { HTTP::header replace Host \"demo-app-kulland-154.azurewebsites.net\" }"
+                        },
+                        "http_xff": {
+                            "class": "HTTP_Profile",
+                            "xForwardedFor": true
+                        },
+                        "demo_app_http_pool": {
+                            "class": "Pool",
+                            "monitors": [
+                                "http"
+                            ],
+                            "members": [
+                                {
+                                    "servicePort": 80,
+                                    "serverAddresses": [
+                                        "10.245.1.5"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }

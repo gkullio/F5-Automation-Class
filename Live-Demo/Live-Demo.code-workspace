@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/Insights_test": true
+		},
+		"CodeGPT.apiKey": "OpenAI",
+		"postman.settings.dotenv-detection-notification-visibility": false,
+		"azureTerraform.checkTerraformCmd": false,
+		"github-actions.workflows.pinned.workflows": []
+	}
+}

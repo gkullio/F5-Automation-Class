@@ -19,6 +19,12 @@ output "Management_Interface_Outputs" {
   }
 }
 
+output "App_Access" {
+  value = {
+    Public_App_Access       = "http://${aws_eip.management_eip.public_ip}"
+  }
+}
+
 output "Virtual_Machine_Info" {
   value = {
     Instance_ID   = aws_instance.nginx_vm.id

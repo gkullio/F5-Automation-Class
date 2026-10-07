@@ -14,6 +14,11 @@ variable "aws_secret_key" {
   default     = null
   sensitive   = true
 }
+variable "aws_profile" {
+  description = "Named profile from ~/.aws/config for local runs, e.g. the IAM Identity Center profile you `aws sso login` to. Leave empty in GitHub Actions so the OIDC environment credentials are used instead."
+  type        = string
+  default     = ""
+}
 variable "vpc_cidr" {
   type        = string
   description = "The CIDR block for the VPC."
@@ -49,8 +54,4 @@ variable "resourceOwner" {
 variable "dp_token" {
   type        = string
   description = "The NGINX Data Plane token."
-}
-variable "le_email" {
-  type        = string
-  description = "Email for Let's Encrypt email registration"
 }

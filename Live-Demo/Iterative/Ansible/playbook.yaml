@@ -1,0 +1,66 @@
+# ==============================================================================
+# F5 BIG-IP AS3 Application Deployment & Teardown Playbook
+# ==============================================================================
+# PREREQUISITES:
+#   1. Install F5 Ansible collection:
+#      ansible-galaxy collection install f5networks.f5_bigip
+#   2. Python dependencies:
+#      pip install requests
+#
+# USAGE EXAMPLES:
+#   1. Deploy / Update application (Default execution):
+#      ansible-playbook playbook.yaml
+#      - OR explicitly using tags -
+#      ansible-playbook playbook.yaml --tags deploy
+#
+#   2. Delete / Teardown application:
+#      ansible-playbook playbook.yaml --tags delete
+#
+# EXPECTATIONS:
+#   - Deploy:
+#       Submits the AS3 declaration in 'demoapp-as3.json' to the BIG-IP.
+#       Creates/updates the 'Demo_Application' tenant, HTTPS virtual server,
+#       iRule, HTTP profile, and backend pool.
+#       Expected result: changed=1 on initial run or updates, changed=0 if in sync.
+#   - Delete:
+#       Sends a DELETE request for tenant 'Demo_Application'.
+#       Removes all objects inside the tenant and deletes the tenant partition.
+#       Protected by the 'never' tag so it will NEVER run during standard deployment.
+# ==============================================================================
+---
+- name: AS3
+  hosts: bigip
+  connection: httpapi
+  gather_facts: false
+
+  # Connection & Authentication details for BIG-IP Management Interface
+  vars:
+    ansible_host: 20.59.15.245
+    ansible_user: gage
+    ansible_httpapi_password: WOLF0359
+    ansible_httpapi_port: 8443
+    ansible_network_os: f5networks.f5_bigip.bigip
+    ansible_httpapi_use_ssl: yes
+    ansible_httpapi_validate_certs: no
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # Task 1: Deploy or Update
+    # Reads 'demoapp-as3.json' and sends declaration via REST API (port 8443).
+    # Runs by default when no tags are specified.
+    # --------------------------------------------------------------------------
+    - name: Deploy or Update AS3
+      f5networks.f5_bigip.bigip_as3_deploy:
+        content: "{{ lookup('file', 'demoapp-as3.json') }}"
+      tags: [ deploy ]
+
+    # --------------------------------------------------------------------------
+    # Task 2: Delete / Teardown
+    # Removes tenant 'Demo_Application' and all associated configurations.
+    # The 'never' tag ensures this task ONLY executes when '--tags delete' is passed.
+    # --------------------------------------------------------------------------
+    - name: Delete AS3 Deployment
+      f5networks.f5_bigip.bigip_as3_deploy:
+        tenant: Demo_Application
+        state: absent
+      tags: [ never, delete ]

@@ -1,0 +1,25 @@
+# IP addresses contain F5 VPN, RE, and DNSLB addresses
+# This is an array and can be added to as needed
+# add your own IP within the quotes and separated by a comma
+# ipv4.icanhazip.com can be used to find your public IP address
+adminSrcAddr        = [""]
+
+# AWS Region
+# OPTIONS: us-east-1, us-east-2, us-west-1, us-west-2, eu-west-1, eu-central-1, ap-southeast-1
+aws_region          = "us-west-2"
+
+# AWS Credentials (optional - leave commented to use environment variables or ~/.aws/credentials)
+# aws_access_key    = ""
+# aws_secret_key    = ""
+
+# Network
+vpc_cidr            = "10.245.0.0/16"
+mgmt_subnet_cidr    = "10.245.1.0/24"
+int_subnet_cidr     = "10.245.2.0/24"
+# Keep this IP scheme for the multi-IP pool member configuration (10.245.2.99 - 10.245.2.105)
+
+# VM
+instance_type       = "t3.2xlarge"
+hostname            = "kulland-ubuntu"
+resourceOwner       = ""  # Email address
+username            = ""

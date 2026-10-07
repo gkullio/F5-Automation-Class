@@ -7,9 +7,9 @@ output "NGINX_JWT_Info" {
 
 output "GCP_Info" {
   value = {
-    Project = var.gcp_project
+    Project = var.gcp_project_id
     Zone    = var.gcp_zone
-    Console = "https://console.cloud.google.com/compute/instances?project=${var.gcp_project}"
+    Console = "https://console.cloud.google.com/compute/instances?project=${var.gcp_project_id}"
   }
 }
 
@@ -20,8 +20,10 @@ output "Management_Interface_Outputs" {
   }
 }
 
-output "Http_site_access" {
-  value = "http://${google_compute_address.management_ip.address}"
+output "App_Access" {
+  value = {
+    Public_App_Access       = "http://${google_compute_address.management_ip.address}"
+  }
 }
 
 output "Virtual_Machine_Info" {

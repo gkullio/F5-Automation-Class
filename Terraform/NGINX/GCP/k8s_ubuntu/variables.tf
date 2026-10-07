@@ -1,7 +1,4 @@
-variable "gcp_project" {
-  type        = string
-  description = "GCP project ID to deploy resources in."
-}
+
 variable "gcp_region" {
   type        = string
   description = "GCP region (e.g. us-central1)."

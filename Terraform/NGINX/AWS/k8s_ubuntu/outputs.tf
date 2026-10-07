@@ -16,3 +16,12 @@ output "AWS_Info" {
     Instance_ID = aws_instance.k8s_vm.id
   }
 }
+
+output "K8s_internal_endpoints" {
+  value = {
+    demoapp     = "demoapp.lab.internal"
+    dvga        = "dvga.lab.internal"
+    dvwa        = "dvwa.lab.internal"
+    juice-shop  = "juice-shop.lab.internal"
+  }
+}

@@ -11,8 +11,17 @@ output "Management_Public_IP" {
 
 output "GCP_Info" {
   value = {
-    Project = var.gcp_project
+    Project = var.gcp_project_id
     Zone    = var.gcp_zone
-    Console = "https://console.cloud.google.com/compute/instances?project=${var.gcp_project}"
+    Console = "https://console.cloud.google.com/compute/instances?project=${var.gcp_project_id}"
+  }
+}
+
+output "K8s_internal_endpoints" {
+  value = {
+    demoapp     = "demoapp.lab.internal"
+    dvga        = "dvga.lab.internal"
+    dvwa        = "dvwa.lab.internal"
+    juice-shop  = "juice-shop.lab.internal"
   }
 }

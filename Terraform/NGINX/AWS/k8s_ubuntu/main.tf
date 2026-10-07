@@ -3,14 +3,14 @@ resource "random_id" "random_id" {
   byte_length = 2
 }
 
-# Look up the latest Ubuntu 26.04 AMI from Canonical
+# Look up the latest Ubuntu 24.04 AMI from Canonical
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd*/ubuntu-*-26.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd*/ubuntu-*-24.04-amd64-server-*"]
   }
 
   filter {
