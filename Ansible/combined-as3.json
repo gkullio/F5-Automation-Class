@@ -1,0 +1,199 @@
+{
+    "class": "AS3",
+    "action": "deploy",
+    "persist": true,
+    "declaration": {
+        "class": "ADC",
+        "schemaVersion": "3.57.0",
+        "remark": "A HTTP sample application",
+        "demo_app": {
+            "class": "Tenant",
+            "demo_app": {
+                "class": "Application",
+                "demo_app_vs": {
+                    "class": "Service_HTTPS",
+                    "virtualAddresses": [
+                        "10.245.2.5"
+                    ],
+                    "virtualPort": 443,
+                    "shareAddresses": true,
+                    "iRules": [
+                        "rule_client_xff"
+                    ],
+                    "profileHTTP": {
+                        "use": "http_xff"
+                    },
+                    "serverTLS": {
+                        "bigip": "/Common/Shared/letsencrypt_tls"
+                    },
+                    "pool": "demo_app_http_pool"
+                },
+                "rule_client_xff": {
+                    "class": "iRule",
+                    "iRule": "when HTTP_REQUEST { HTTP::header insert X-Forwarded-For [IP::remote_addr] }"
+                },
+                "http_xff": {
+                    "class": "HTTP_Profile",
+                    "xForwardedFor": true
+                },
+                "demo_app_http_pool": {
+                    "class": "Pool",
+                    "monitors": [
+                        "http"
+                    ],
+                    "members": [
+                        {
+                            "servicePort": 80,
+                            "serverAddresses": [
+                                "10.245.3.100"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "juice_shop_app": {
+            "class": "Tenant",
+            "juice_shop": {
+                "class": "Application",
+                "juice_shop_vs": {
+                    "class": "Service_HTTPS",
+                    "virtualAddresses": [
+                        "10.245.2.6"
+                    ],
+                    "virtualPort": 443,
+                    "shareAddresses": true,
+                    "iRules": [
+                        "rule_client_xff"
+                    ],
+                    "profileHTTP": {
+                        "use": "http_xff"
+                    },
+                    "serverTLS": {
+                        "bigip": "/Common/Shared/letsencrypt_tls"
+                    },
+                    "pool": "Juice_shop_http_pool"
+                },
+                "rule_client_xff": {
+                    "class": "iRule",
+                    "iRule": "when HTTP_REQUEST { HTTP::header insert X-Forwarded-For [IP::remote_addr] }"
+                },
+                "http_xff": {
+                    "class": "HTTP_Profile",
+                    "xForwardedFor": true
+                },
+                "Juice_shop_http_pool": {
+                    "class": "Pool",
+                    "monitors": [
+                        "http"
+                    ],
+                    "members": [
+                        {
+                            "servicePort": 80,
+                            "serverAddresses": [
+                                "10.245.3.101"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "dvwa_app": {
+            "class": "Tenant",
+            "dvwa_app": {
+                "class": "Application",
+                "dvwa_app_vs": {
+                    "class": "Service_HTTPS",
+                    "virtualAddresses": [
+                        "10.245.2.7"
+                    ],
+                    "virtualPort": 443,
+                    "shareAddresses": true,
+                    "iRules": [
+                        "rule_client_xff"
+                    ],
+                    "profileHTTP": {
+                        "use": "http_xff"
+                    },
+                    "serverTLS": {
+                        "bigip": "/Common/Shared/letsencrypt_tls"
+                    },
+                    "pool": "dvwa_http_pool"
+                },
+                "rule_client_xff": {
+                    "class": "iRule",
+                    "iRule": "when HTTP_REQUEST { HTTP::header insert X-Forwarded-For [IP::remote_addr] }"
+                },
+                "http_xff": {
+                    "class": "HTTP_Profile",
+                    "xForwardedFor": true
+                },
+                "dvwa_http_pool": {
+                    "class": "Pool",
+                    "monitors": [
+                        {
+                            "use": "dvwa_monitor"
+                        }
+                    ],
+                    "members": [
+                        {
+                            "servicePort": 80,
+                            "serverAddresses": [
+                                "10.245.3.102"
+                            ]
+                        }
+                    ]
+                },
+                "dvwa_monitor": {
+                    "class": "Monitor",
+                    "monitorType": "http",
+                    "send": "GET /login.php",
+                    "receive": "Login"
+                }
+            }
+        },
+        "dvga_app": {
+            "class": "Tenant",
+            "dvga_app": {
+                "class": "Application",
+                "dvga_app_vs": {
+                    "class": "Service_HTTP",
+                    "virtualAddresses": [
+                        "10.245.2.7"
+                    ],
+                    "virtualPort": 5013,
+                    "shareAddresses": true,
+                    "iRules": [
+                        "rule_client_xff"
+                    ],
+                    "profileHTTP": {
+                        "use": "http_xff"
+                    },
+                    "pool": "dvga_app_pool"
+                },
+                "rule_client_xff": {
+                    "class": "iRule",
+                    "iRule": "when HTTP_REQUEST { HTTP::header insert X-Forwarded-For [IP::remote_addr] }"
+                },
+                "http_xff": {
+                    "class": "HTTP_Profile",
+                    "xForwardedFor": true
+                },
+                "dvga_app_pool": {
+                    "class": "Pool",
+                    "monitors": [
+                        "icmp"
+                    ],
+                    "members": [
+                        {
+                            "servicePort": 5013,
+                            "serverAddresses": [
+                                "10.245.3.103"
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
