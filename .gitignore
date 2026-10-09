@@ -3,6 +3,8 @@
 *.terraform.lock.hcl
 *.terraform.tfstate.lock.info
 
+*.p12
+
 **/.terraform/
 
 # Terraform state (contains sensitive infrastructure data and secrets)
