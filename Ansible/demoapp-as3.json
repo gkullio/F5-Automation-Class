@@ -13,7 +13,7 @@
                         "class": "Application",
                         "demo_app_https_vs": {
                             "class": "Service_HTTPS",
-                            "virtualAddresses": [ "10.245.1.4" ],
+                            "virtualAddresses": [ "" ],
                             "virtualPort": 443,
                             "shareAddresses": true,
                             "iRules": [
@@ -29,7 +29,7 @@
                         },
                         "rule_client_xff_replace_host": {
                             "class": "iRule",
-                            "iRule": "when HTTP_REQUEST { HTTP::header replace Host \"demo-app-kulland-154.azurewebsites.net\" }"
+                            "iRule": "when HTTP_REQUEST { HTTP::header replace Host \"\" }"
                         },
                         "http_xff": {
                             "class": "HTTP_Profile",
@@ -44,7 +44,7 @@
                                 {
                                     "servicePort": 80,
                                     "serverAddresses": [
-                                        "10.245.1.5"
+                                        ""
                                     ]
                                 }
                             ]

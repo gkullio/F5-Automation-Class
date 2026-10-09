@@ -6,10 +6,10 @@
 
   # Connection Info
   vars:
-    ansible_host: bigip-payg.kulland.info
-    ansible_user: admin
-    ansible_httpapi_password: WOLF0359
-    ansible_httpapi_port: 443
+    ansible_host: 
+    ansible_user: 
+    ansible_httpapi_password: 
+    ansible_httpapi_port: 8443
     ansible_network_os: f5networks.f5_bigip.bigip
     ansible_httpapi_use_ssl: yes
     ansible_httpapi_validate_certs: no
@@ -19,7 +19,8 @@
       #- "juice_shop_app"
       #- "dvwa_app"
       #- "dvga_app"
-      - "Shared"
+      #- "Shared"
+      #- "Demo_Application"
 
 
   tasks:
