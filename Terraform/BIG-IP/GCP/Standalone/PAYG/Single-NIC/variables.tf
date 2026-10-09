@@ -26,6 +26,7 @@ variable "project_name" {
 }
 
 variable "resourceOwner" {}
+variable "ownerEmail" {}
 variable "machine_type" {
   description = "GCP machine type."
   type        = string

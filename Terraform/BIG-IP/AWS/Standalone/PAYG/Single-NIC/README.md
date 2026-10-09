@@ -53,7 +53,7 @@ This Terraform project deploys a standalone F5 BIG-IP Virtual Edition (VE) in a 
 ## Prerequisites
 
 - [Terraform](https://www.terraform.io/downloads) >= 1.0
-- AWS CLI configured with SSO or environment credentials (`aws sso login --profile <name>`)
+- AWS CLI configured with SSO or environment credentials (`aws sso login --profile <name>`) (`aws configure`)
 - Azure CLI / Service Principal (for cross-cloud DNS, Key Vault, and artifact-store dependencies)
 - An SSH key pair
 - F5 BIG-IP AWS Marketplace offer accepted for the PAYG AMI
@@ -68,6 +68,17 @@ This project does **not** use `access_key` / `secret_key` variables. The AWS pro
 
 Leave `aws_profile` empty in CI so environment credentials are used.
 
+Input your AWS user created role into your local machine.
+```bash 
+aws configure
+```
+- AWS Access Key ID [None]: 
+- AWS Secret Access Key [None]: 
+- Default region name [None]: us-east-1
+- Default output format [None]: table
+
+
+
 ### Accept Marketplace Terms
 
 Before deploying, accept the AWS Marketplace terms for the BIG-IP PAYG AMI. This is a one-time step per AWS account:
@@ -79,21 +90,9 @@ Confirm available AMIs in your region:
 
 ```bash
 aws ec2 describe-images --owners aws-marketplace \
-  --filters "Name=name,Values=*BIGIP-17*PAYG*" \
-  --query 'Images[].[Name,ImageId,CreationDate]' --output table
+  --filters "Name=name,Values=*BIGIP-17*PAYG*Best*25M*" \
+  --query 'Images[].[Name,ImageId,CreationDate]' --region us-east-1 --output table
 ```
-
-### Azure Cross-Cloud Dependencies
-
-Several shared resources live in Azure and are referenced by this AWS project:
-
-| Dependency | Where It Lives | Why It Stayed |
-|------------|----------------|---------------|
-| `kulland.info` DNS zone | Azure DNS | The zone already exists; an A-record pointing at an Elastic IP works from anywhere |
-| Wildcard TLS certificate | Azure Key Vault | Avoids duplicating the cert into AWS Secrets Manager |
-| CrowdStrike sensor artifacts | Azure Blob Storage | Fetched over HTTPS with a SAS token; works identically from EC2 |
-
-The Azure Service Principal credentials (`client_id`, `client_secret`, `tenant_id`, `subscription_id`) are required for these cross-cloud lookups.
 
 ## Project Structure
 
@@ -171,14 +170,6 @@ Single-NIC/
 | `aws_region` | AWS region to deploy into (e.g., `us-east-1`) | -- |
 | `aws_profile` | Named profile from `~/.aws/config` for local SSO runs; leave empty in CI | `""` |
 
-### Azure Cross-Cloud Credentials
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `client_id` | Azure Service Principal Application ID | Yes |
-| `client_secret` | Azure Service Principal Secret | Yes |
-| `tenant_id` | Azure AD Tenant ID | Yes |
-| `subscription_id` | Azure Subscription ID | Yes |
 
 ### Global
 
@@ -232,18 +223,7 @@ Single-NIC/
 | `timezone` | System timezone | -- |
 | `script_name` | Onboarding template name (without `.tmpl`) | -- |
 | `INIT_URL` | F5 BIG-IP Runtime Init download URL | v2.0.3 |
-| `key_vault_name` | Azure Key Vault storing the wildcard certificate | -- |
-| `key_vault_rg` | Resource group containing the Key Vault | `kulland-house-keys` |
 
-### CrowdStrike
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `crowdstrike_enabled` | Install the CrowdStrike Falcon sensor during onboarding | `true` |
-| `cs_cid` | CrowdStrike Customer ID (32 hex + hyphen + 2-char checksum, sensitive) | `""` |
-| `cs_tags_bigip` | Falcon sensor grouping tags (comma-separated) | `""` |
-| `cs_provisioning_token` | Falcon installation token (sensitive) | `""` |
-| `cs_sas_validity_hours` | Lifetime of the read-only SAS token for sensor packages | `8760` (1 year) |
 
 ## Outputs
 
@@ -304,31 +284,6 @@ Unlike the Azure projects which use blob storage with managed identity or SAS to
 - Grants the BIG-IP's **IAM instance profile** read-only access (`s3:GetObject`) scoped to the two RPM objects
 - The onboarding script uses a built-in Python helper (`s3_download.py`) that handles **IMDSv2 token retrieval** and **SigV4 request signing** using only Python stdlib
 
-### CrowdStrike Toggle
-
-`crowdstrike_enabled` (default `true`) drives the sensor install from one place in `terraform.tfvars`. It fans out to both consumers -- the artifact-lookup module (which resolves sensor blob URLs and mints a SAS token) and the bigip module (which gates the install block in the onboarding template).
-
-When disabled (`false`):
-- No CrowdStrike blob lookups, so no SAS token is written into state
-- The install block is removed from the rendered `user_data` by a `templatefile` `if` directive
-- `cs_cid`, `cs_tags_bigip`, and `cs_provisioning_token` can all stay empty
-
-When enabled with an empty `cs_cid`, or enabled in one module but not the other, the deploy fails at plan time via a precondition on `aws_instance.bigip` rather than twenty minutes into cloud-init.
-
-## Key Differences from Azure Single-NIC
-
-| Feature | Azure Single-NIC | AWS Single-NIC (PAYG) |
-|---------|------------------|------------------------|
-| Authentication | Service Principal (`client_id`/`client_secret`) | SSO profile or environment credentials (no static keys) |
-| Network container | Resource Group | `project_name` tag via provider `default_tags` |
-| Network module | VNet + Subnet | VPC + Subnet + Internet Gateway + Route Table + Association |
-| Public IP | `azurerm_public_ip` (Static, Standard SKU) | `aws_eip` (VPC-scoped) + `aws_eip_association` |
-| Security | Network Security Group (priority-based) | Security Group (allow-list only, egress deny-all by default) |
-| Boot diagnostics | Storage Account | `aws ec2 get-console-output` (built-in, no extra resource) |
-| Image selection | `source_image_reference` + `plan` block | `data "aws_ami"` wildcard search + Marketplace subscription |
-| RPM delivery | Blob Storage + managed identity | S3 bucket + IAM instance profile |
-| Availability zone | Bare number (`1`) | Full AZ name (`us-east-1a`), immutable on the subnet |
-| Hostname/region | IMDS metadata lookup | Static values from Terraform (IMDSv2 compatibility) |
 
 ## Security Notes
 
@@ -350,4 +305,4 @@ When enabled with an empty `cs_cid`, or enabled in one module but not the other,
 terraform destroy
 ```
 
-> **Note**: Unlike Azure, AWS has no resource group to delete as a single unit. All resources are tagged with `project` and `owner` via provider `default_tags` for easy identification. Use the `ec2_console_url` output to navigate directly to the instance, or filter the AWS console on the `project_name` tag to find all deployed resources.
+> **Note**: AWS has all resources tagged with `project` and `owner` via provider `default_tags` for easy identification. Use the `ec2_console_url` output to navigate directly to the instance, or filter the AWS console on the `project_name` tag to find all deployed resources.

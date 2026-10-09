@@ -14,14 +14,6 @@ variable "aws_profile" {
   default     = ""
 }
 
-# Azure Credentials
-#
-# Still needed: the kulland.info DNS zone, the wildcard-cert Key Vault and the
-# shared artifact store all live in Azure. See README.md.
-variable "client_id" {}
-variable "client_secret" {}
-variable "tenant_id" {}
-variable "subscription_id" {}
 
 # Global Variables
 #
@@ -34,6 +26,7 @@ variable "project_name" {
 }
 
 variable "resourceOwner" {}
+variable "ownerEmail" {}
 variable "instance_size" {}
 
 

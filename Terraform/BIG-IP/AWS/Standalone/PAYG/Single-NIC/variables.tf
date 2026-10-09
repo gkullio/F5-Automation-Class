@@ -34,6 +34,7 @@ variable "project_name" {
 }
 
 variable "resourceOwner" {}
+variable "ownerEmail" {}
 variable "instance_size" {}
 
 

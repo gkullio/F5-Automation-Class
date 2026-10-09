@@ -59,6 +59,25 @@ This Terraform project deploys a standalone F5 BIG-IP Virtual Edition (VE) in a 
 - F5 BIG-IP AWS Marketplace terms accepted for the **BYOL** offer (separate from PAYG)
 - Azure Service Principal credentials (for cross-cloud dependencies such as DNS and Key Vault)
 
+### AWS Authentication
+
+This project does **not** use `access_key` / `secret_key` variables. The AWS provider resolves credentials in this order:
+
+1. **`aws_profile`** -- named profile from `~/.aws/config` (local SSO runs)
+2. **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`** -- environment variables (GitHub Actions OIDC)
+3. **EC2 instance role** -- when running from an EC2 instance
+
+Leave `aws_profile` empty in CI so environment credentials are used.
+
+Input your AWS user created role into your local machine.
+```bash 
+aws configure
+```
+- AWS Access Key ID [None]: 
+- AWS Secret Access Key [None]: 
+- Default region name [None]: us-east-1
+- Default output format [None]: table
+
 ### Accept AWS Marketplace Terms
 
 Before deploying, accept the AWS Marketplace offer for the BIG-IP **BYOL** image. Navigate to the [AWS Marketplace](https://aws.amazon.com/marketplace) and search for **F5 BIG-IP BYOL**, then subscribe. The BYOL offer is separate from the PAYG offer -- accepting one does not cover the other. Skip this and the apply fails with `OptInRequired` at instance creation.
@@ -113,7 +132,14 @@ Multi-NIC/
 
    Edit `terraform.tfvars` and fill in all required values (see [Variables](#variables) below). Be sure to set `byol_license` to your F5 registration key.
 
-2. **Deploy with Terraform**
+2. **Authenticate to AWS**
+
+   ```bash
+   aws sso login --profile <your-profile>
+   ```
+
+
+3. **Deploy with Terraform**
 
    ```bash
    terraform init -upgrade
@@ -122,7 +148,7 @@ Multi-NIC/
    terraform apply "tfplan"
    ```
 
-3. **Access the BIG-IP**
+4. **Access the BIG-IP**
 
    After deployment, Terraform outputs:
    - **SSH**: `ssh admin@<mgmt_eip>`
@@ -130,7 +156,7 @@ Multi-NIC/
    - **External VIP**: `https://<external_eip>`
    - **EC2 Console**: Direct link to the instance in the AWS Console
 
-4. **Monitor onboarding progress**
+5. **Monitor onboarding progress**
 
    ```bash
    ssh -t admin@<mgmt_eip> 'run util bash -c "tail -f /var/log/cloud/startup-script.log"'

@@ -9,12 +9,6 @@ variable "aws_profile" {
   default     = ""
 }
 
-# Azure Credentials
-variable "client_id" {}
-variable "client_secret" {}
-variable "tenant_id" {}
-variable "subscription_id" {}
-
 # Global Variables
 variable "project_name" {
   description = "Grouping label stamped onto every resource via default_tags."
@@ -23,6 +17,7 @@ variable "project_name" {
 }
 
 variable "resourceOwner" {}
+variable "ownerEmail" {}
 variable "instance_size" {}
 
 ####### Module aws-vpc #######

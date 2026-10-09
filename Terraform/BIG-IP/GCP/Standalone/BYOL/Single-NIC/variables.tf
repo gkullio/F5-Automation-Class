@@ -12,11 +12,6 @@ variable "gcp_zone" {
   type        = string
 }
 
-# Azure Credentials (for Key Vault, DNS, artifact store)
-variable "client_id" {}
-variable "client_secret" {}
-variable "tenant_id" {}
-variable "subscription_id" {}
 
 # Global Variables
 variable "project_name" {
@@ -26,6 +21,8 @@ variable "project_name" {
 }
 
 variable "resourceOwner" {}
+variable "ownerEmail" {}
+
 variable "machine_type" {
   description = "GCP machine type."
   type        = string

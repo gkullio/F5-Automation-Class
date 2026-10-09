@@ -7,6 +7,7 @@ variable "subscription_id" {}
 # Global Variables
 variable "rg_name" {}
 variable "resourceOwner" {}
+variable "ownerEmail" {}
 variable "location" {}
 variable "instance_size" {}
 

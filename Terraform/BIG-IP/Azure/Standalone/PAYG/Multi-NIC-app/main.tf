@@ -8,9 +8,29 @@ resource "random_id" "random_id" {
   byte_length = 1
 }
 
-resource "azurerm_resource_group" "rg" {
-    name                 = "${var.rg_name}-${random_id.random_id.dec}"
-    location             = var.location
+locals {
+  my_ip        = chomp(data.http.my_ip.response_body)
+  my_public_ip = "${local.my_ip}/32"
+  my_ip_in_vpn = anytrue([
+    for cidr in var.vpnMgmtSrcAddr :
+    try(
+      cidrhost("${local.my_ip}/${strcontains(cidr, "/") ? split("/", cidr)[1] : "32"}", 0) == cidrhost(strcontains(cidr, "/") ? cidr : "${cidr}/32", 0),
+      false
+    )
+  ])
+  my_ip_in_re = anytrue([
+    for cidr in var.REtrafficSrcAddr :
+    try(
+      cidrhost("${local.my_ip}/${strcontains(cidr, "/") ? split("/", cidr)[1] : "32"}", 0) == cidrhost(strcontains(cidr, "/") ? cidr : "${cidr}/32", 0),
+      false
+    )
+  ])
+  adminSrcAddr     = local.my_ip_in_vpn ? var.vpnMgmtSrcAddr : concat(var.vpnMgmtSrcAddr, [local.my_public_ip])
+  REtrafficSrcAddr = local.my_ip_in_re  ? var.REtrafficSrcAddr : concat(var.REtrafficSrcAddr, [local.my_public_ip])
+  tags = {
+    owner = var.resourceOwner
+    email = var.ownerEmail
+  }
 }
 
 locals {

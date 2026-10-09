@@ -47,10 +47,9 @@ data "aws_ami" "f5" {
 locals {
   # Management plane. On 1-NIC the GUI is on 8443, not 443: httpd cedes 443 to
   # tmm so virtual servers can use it. SSH stays on 22.
-  admin_ports = [22, 8443]
-
+  admin_ports = [22, 443, 8443]
   # Data plane -- virtual servers created by the AS3 declaration.
-  app_ports = [80, 443, 8080, 8081]
+  app_ports = [80, 443, 8080]
 }
 
 resource "aws_security_group" "mgmt" {
