@@ -35,12 +35,10 @@ flowchart TD
         end
 
         subgraph K8sNode["Ubuntu 24.04 VM (kulland-k8s-vm)"]
-            IntNIC --> HostNet["Host Network Ingress Ports\n(80, 443, 8080, 8443)"]
+            IntNIC --> HostNet["Host Port 80\n(NGF data plane hostPort)"]
             
-            subgraph IngressLayer["Ingress & Gateway Controllers"]
-                CommunityIngress["ingress-nginx Controller\n(hostNetwork: true)"]
-                KIC["NGINX Plus Ingress Controller (NIC)\n(Class: nginx-plus)"]
-                NGF["NGINX Gateway Fabric (NGF)\n(Gateway API)"]
+            subgraph IngressLayer["NGINX Gateway Fabric (Plus)"]
+                NGF["Gateway: lab-gateway\n(GatewayClass: nginx, Listener: HTTP/80)"]
             end
 
             HostNet --> IngressLayer
@@ -71,13 +69,15 @@ The internal network interface (`azurerm_network_interface.internal_nic`) is con
 
 | IP Address | Interface | Recommended BIG-IP Role | Target Workload |
 | :--- | :--- | :--- | :--- |
-| `10.245.2.99` | Primary NIC IP | General Gateway / Ingress Endpoint | Default Ingress Controller |
+| `10.245.2.99` | Primary NIC IP | General Gateway Endpoint | NGF `lab-gateway` (Port 80) |
 | `10.245.2.100` | Secondary Alias 1 | Pool Member: DemoApp | `demoapp.lab.internal` (Port 80) |
 | `10.245.2.101` | Secondary Alias 2 | Pool Member: DVGA (GraphQL) | `dvga.lab.internal` (Port 80) |
 | `10.245.2.102` | Secondary Alias 3 | Pool Member: DVWA (Web App) | `dvwa.lab.internal` (Port 80) |
 | `10.245.2.103` | Secondary Alias 4 | Pool Member: OWASP Juice Shop | `juice-shop.lab.internal` (Port 80) |
-| `10.245.2.104` | Secondary Alias 5 | Pool Member: NGINX Plus IC | Ingress Class `nginx-plus` |
+| `10.245.2.104` | Secondary Alias 5 | Spare | *(Unassigned)* |
 | `10.245.2.105` | Secondary Alias 6 | Pool Member: NGINX Gateway Fabric | Gateway API listeners |
+
+All IPs land on the same NGF data plane on port 80; NGF routes each request to the correct application by its HTTP `Host` header via `HTTPRoute` hostnames.
 
 This multi-IP assignment enables BIG-IP administrators to:
 - Configure **1:1 Node definitions** in BIG-IP without requiring complex port translations.
@@ -97,7 +97,7 @@ The included workloads represent the industry standards for application security
 #### B. Two-Tier ADC Architecture (F5 BIG-IP + NGINX)
 Simulate enterprise two-tier application delivery architectures:
 - **Tier 1 (F5 BIG-IP)**: Perimeter security, DDoS mitigation, SSL offload/re-encryption, global traffic steering, and high-capacity firewalling.
-- **Tier 2 (NGINX Plus Ingress / Gateway Fabric)**: Dynamic cluster ingress, fine-grained path-based routing, JWT validation, and per-service microsegmentation.
+- **Tier 2 (NGINX Gateway Fabric)**: Dynamic cluster ingress, fine-grained path-based routing, JWT validation, and per-service microsegmentation.
 
 #### C. Health Monitoring & Traffic Steering
 - Test standard HTTP monitors (`GET /` or custom URI health checks).
@@ -139,7 +139,7 @@ create ltm virtual vs_juice_shop_http { \
 
 All applications are consolidated into multi-document manifests under `manifests/` and managed through Kustomize:
 
-| Application | Namespace | Internal Container Port | ClusterIP Service Port | Ingress Host Header |
+| Application | Namespace | Internal Container Port | ClusterIP Service Port | HTTPRoute Hostname |
 | :--- | :--- | :--- | :--- | :--- |
 | **DemoApp** | `demoapp` | `8080/TCP` | `80/TCP` | `demoapp.lab.internal` |
 | **DVGA** | `dvga` | `5013/TCP` | `80/TCP` | `dvga.lab.internal` |
@@ -164,13 +164,14 @@ k8s_ubuntu/
 ├── terraform.tfvars               # Deployment-specific parameters and network CIDRs
 ├── manifests/                     # Consolidated Kubernetes manifests
 │   ├── kustomization.yaml         # Kustomize entrypoint for one-shot deployment
-│   ├── demoapp.yaml               # Demo application manifests (NS, Deploy, Svc, Ingress, HPA)
+│   ├── gateway.yaml               # NGF Gateway (lab-gateway, HTTP listener on port 80)
+│   ├── demoapp.yaml               # Demo application manifests (NS, Deploy, Svc, HTTPRoute, HPA)
 │   ├── dvga.yaml                  # Damn Vulnerable GraphQL App manifests
 │   ├── dvwa.yaml                  # DVWA and MySQL backend manifests
 │   └── juice-shop.yaml            # OWASP Juice Shop manifests
 ├── scripts/
 │   ├── k8s.tpl                    # Cloud-init template (Containerd, K8s v1.32, Helm, Flannel)
-│   └── post-provision.sh          # Post-provisioning orchestrator (Ingress, Helm, Manifest apply)
+│   └── post-provision.sh          # Post-provisioning orchestrator (NGF Helm install, Manifest apply)
 └── secrets/
     ├── .gitignore                 # Prevents committing sensitive certificates/keys
     ├── nginx-repo.jwt             # NGINX Plus JWT license and private registry credential
@@ -217,10 +218,10 @@ terraform apply
    - Installs Flannel CNI, Metrics Server (for HPA), and Helm v3.
    - Untaints the control-plane node so workloads run on this single-node instance.
 4. **Post-Provisioning (`scripts/post-provision.sh`)**:
-   - Deploys community `ingress-nginx` on `hostNetwork: true`.
-   - Applies all application manifests using `kubectl apply -k /home/<user>/manifests`.
+   - Installs the Gateway API CRDs.
    - Creates docker-registry and license secrets from `secrets/nginx-repo.jwt`.
-   - Deploys **NGINX Ingress Controller (NIC)** and **NGINX Gateway Fabric (NGF)** using official OCI Helm charts.
+   - Deploys **NGINX Gateway Fabric (NGF)** with NGINX Plus from the official OCI Helm chart. The data plane runs as a DaemonSet bound to host port 80.
+   - Applies the `lab-gateway` Gateway and all application manifests (with `HTTPRoute`s) using `kubectl apply -k /home/<user>/manifests`.
 
 ---
 
@@ -240,8 +241,9 @@ kubectl get nodes -o wide
 # Check all deployed pods
 kubectl get pods -A
 
-# Check application ingress resources
-kubectl get ingress -A
+# Check the Gateway and application routes
+kubectl get gateway -n nginx-gateway
+kubectl get httproute -A
 
 # Test internal application routing via HTTP Host header
 curl -H "Host: demoapp.lab.internal" http://localhost/
