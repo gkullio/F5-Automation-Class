@@ -33,6 +33,7 @@ resource "null_resource" "apply_manifests" {
 
   provisioner "remote-exec" {
     inline = [
+      "sed -i 's/\\r$//' /home/${var.username}/scripts/post-provision.sh",
       "chmod +x /home/${var.username}/scripts/post-provision.sh",
       "/home/${var.username}/scripts/post-provision.sh"
     ]
